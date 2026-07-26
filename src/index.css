@@ -1,0 +1,52 @@
+/**
+ * Global styles + design tokens for Go!
+ *
+ * Vision: coral (#FF6B6B) as the bold accent, soft warm page backgrounds inside
+ * the phone shell, and a near-black desktop backdrop so the phone frame pops.
+ *
+ * Tailwind v4: tokens in `@theme` become utility classes automatically
+ * (e.g. `--color-primary` → `bg-primary`, `text-primary`).
+ */
+
+@import "tailwindcss";
+
+/* Brand / surface tokens — tweak here to restyle the whole app */
+@theme {
+  --color-primary: #ff6b6b;
+  --color-primary-dark: #ee5a5a;
+  --color-primary-light: #ff8787;
+  --color-surface: #ffffff;
+  --color-muted: #6b7280;
+  --color-border: #e5e7eb;
+  --color-bg: #f8f7f5;
+  --font-sans: "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Fill the viewport so the phone shell + Reels feed can use 100% height */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  /* Dark page chrome behind the phone frame on desktop */
+  background-color: #0a0a0a;
+  color: #1f2937;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Momentum scrolling for the Instagram-style vertical Feed */
+.snap-y {
+  -webkit-overflow-scrolling: touch;
+}
