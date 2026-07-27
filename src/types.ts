@@ -88,4 +88,6 @@ export interface EventRoom {
   /** Epoch ms when voting ends; null while still in lobby. */
   votingEndsAt: number | null
   createdAt: number
+  /** Server-side write counter for concurrent updates. */
+  version?: number
 }

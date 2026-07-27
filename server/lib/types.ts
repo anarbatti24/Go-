@@ -29,6 +29,8 @@ export interface EventRoom {
   voteDurationSeconds: number
   votingEndsAt: number | null
   createdAt: number
+  /** Incremented on every write — used for compare-and-swap. */
+  version?: number
 }
 
 export type PlaceSource = 'yelp' | 'tmdb' | 'sample'

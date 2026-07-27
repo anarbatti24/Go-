@@ -1,5 +1,8 @@
 /**
  * Room REST handlers — shared by Vite middleware and Vercel `/api/rooms`.
+ *
+ * All mutations go through store.update() (versioned CAS) so concurrent
+ * suggestion adds from friends merge instead of overwriting.
  */
 
 import { getRoomStore } from './roomStore.js'
@@ -9,6 +12,14 @@ export const MAX_SUGGESTIONS = 8
 export const MIN_VOTE_SECONDS = 10
 export const MAX_VOTE_SECONDS = 120
 export const DEFAULT_VOTE_SECONDS = 30
+
+class HttpError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
 
 function newId(): string {
   try {
@@ -93,13 +104,37 @@ async function loadRoom(code: string): Promise<EventRoom | null> {
   const room = await store.get(code)
   if (!room) return null
   if (finalizeIfExpired(room)) {
-    await store.set(code, room)
+    try {
+      return (
+        (await store.update(code, (draft) => {
+          draft.phase = 'results'
+          draft.winnerId =
+            draft.suggestions.length > 0 ? pickWinner(draft) : null
+        })) ?? room
+      )
+    } catch {
+      return room
+    }
   }
   return room
 }
 
-async function saveRoom(room: EventRoom): Promise<void> {
-  await getRoomStore().set(room.code, room)
+/**
+ * Apply a mutation with CAS retries. Mutator may throw HttpError to abort.
+ */
+async function mutateRoom(
+  code: string,
+  mutator: (room: EventRoom) => void,
+): Promise<EventRoom> {
+  const store = getRoomStore()
+  try {
+    const updated = await store.update(code, mutator)
+    if (!updated) throw new HttpError(404, 'Room not found')
+    return updated
+  } catch (err) {
+    if (err instanceof HttpError) throw err
+    throw err
+  }
 }
 
 /**
@@ -122,7 +157,9 @@ export async function handleRoomsRequest(
       const hostId = newId()
       const code = await generateCode()
       const placeIds = Array.isArray(data.placeIds)
-        ? data.placeIds.filter((id): id is string => typeof id === 'string').slice(0, MAX_SUGGESTIONS)
+        ? data.placeIds
+            .filter((id): id is string => typeof id === 'string')
+            .slice(0, MAX_SUGGESTIONS)
         : []
 
       const host: EventMember = { id: hostId, name: hostName, isHost: true }
@@ -152,9 +189,10 @@ export async function handleRoomsRequest(
         ),
         votingEndsAt: null,
         createdAt: Date.now(),
+        version: 0,
       }
 
-      await saveRoom(room)
+      await store.set(code, room)
       return {
         status: 201,
         body: {
@@ -174,145 +212,127 @@ export async function handleRoomsRequest(
 
     const joinMatch = path.match(/^\/api\/rooms\/(\d{4})\/join$/)
     if (joinMatch && verb === 'POST') {
-      const room = await loadRoom(joinMatch[1]!)
-      if (!room) return { status: 404, body: { error: 'Room not found' } }
-
-      const name =
-        typeof data.name === 'string' ? data.name.trim() : ''
+      const name = typeof data.name === 'string' ? data.name.trim() : ''
       if (!name) return { status: 400, body: { error: 'Name is required' } }
 
-      const existing = room.members.find(
-        (m) => m.name.toLowerCase() === name.toLowerCase(),
-      )
-      if (existing) {
-        return {
-          status: 200,
-          body: { room: roomPayload(room), memberId: existing.id },
+      let memberId = ''
+      const room = await mutateRoom(joinMatch[1]!, (draft) => {
+        const existing = draft.members.find(
+          (m) => m.name.toLowerCase() === name.toLowerCase(),
+        )
+        if (existing) {
+          memberId = existing.id
+          return
         }
-      }
-
-      if (room.phase !== 'lobby') {
-        return {
-          status: 400,
-          body: {
-            error: 'Voting already started — ask the host for a new room',
-          },
+        if (draft.phase !== 'lobby') {
+          throw new HttpError(
+            400,
+            'Voting already started — ask the host for a new room',
+          )
         }
-      }
+        const member: EventMember = {
+          id: newId(),
+          name,
+          isHost: false,
+        }
+        draft.members.push(member)
+        memberId = member.id
+      })
 
-      const member: EventMember = {
-        id: newId(),
-        name,
-        isHost: false,
-      }
-      room.members.push(member)
-      await saveRoom(room)
       return {
         status: 200,
-        body: { room: roomPayload(room), memberId: member.id },
+        body: { room: roomPayload(room), memberId },
       }
     }
 
     const settingsMatch = path.match(/^\/api\/rooms\/(\d{4})\/settings$/)
     if (settingsMatch && verb === 'POST') {
-      const room = await loadRoom(settingsMatch[1]!)
-      if (!room) return { status: 404, body: { error: 'Room not found' } }
-      if (room.phase !== 'lobby') {
-        return {
-          status: 400,
-          body: { error: 'Can only change settings in the lobby' },
+      const room = await mutateRoom(settingsMatch[1]!, (draft) => {
+        if (draft.phase !== 'lobby') {
+          throw new HttpError(400, 'Can only change settings in the lobby')
         }
-      }
-      if (!requireHost(room, typeof data.memberId === 'string' ? data.memberId : undefined)) {
-        return { status: 403, body: { error: 'Only the host can change settings' } }
-      }
-      if (typeof data.voteDurationSeconds === 'number') {
-        room.voteDurationSeconds = clampDuration(data.voteDurationSeconds)
-      }
-      await saveRoom(room)
+        if (
+          !requireHost(
+            draft,
+            typeof data.memberId === 'string' ? data.memberId : undefined,
+          )
+        ) {
+          throw new HttpError(403, 'Only the host can change settings')
+        }
+        if (typeof data.voteDurationSeconds === 'number') {
+          draft.voteDurationSeconds = clampDuration(data.voteDurationSeconds)
+        }
+      })
       return { status: 200, body: { room: roomPayload(room) } }
     }
 
     const startMatch = path.match(/^\/api\/rooms\/(\d{4})\/start$/)
     if (startMatch && verb === 'POST') {
-      const room = await loadRoom(startMatch[1]!)
-      if (!room) return { status: 404, body: { error: 'Room not found' } }
-      if (room.phase !== 'lobby') {
-        return { status: 400, body: { error: 'Voting already started' } }
-      }
-      if (room.suggestions.length < 2) {
-        return {
-          status: 400,
-          body: { error: 'Add at least 2 places before starting' },
+      const room = await mutateRoom(startMatch[1]!, (draft) => {
+        if (draft.phase !== 'lobby') {
+          throw new HttpError(400, 'Voting already started')
         }
-      }
-      if (!requireHost(room, typeof data.memberId === 'string' ? data.memberId : undefined)) {
-        return { status: 403, body: { error: 'Only the host can start voting' } }
-      }
-      if (typeof data.voteDurationSeconds === 'number') {
-        room.voteDurationSeconds = clampDuration(data.voteDurationSeconds)
-      }
-      room.phase = 'voting'
-      room.votes = {}
-      room.winnerId = null
-      room.votingEndsAt = Date.now() + room.voteDurationSeconds * 1000
-      await saveRoom(room)
+        if (draft.suggestions.length < 2) {
+          throw new HttpError(400, 'Add at least 2 places before starting')
+        }
+        if (
+          !requireHost(
+            draft,
+            typeof data.memberId === 'string' ? data.memberId : undefined,
+          )
+        ) {
+          throw new HttpError(403, 'Only the host can start voting')
+        }
+        if (typeof data.voteDurationSeconds === 'number') {
+          draft.voteDurationSeconds = clampDuration(data.voteDurationSeconds)
+        }
+        draft.phase = 'voting'
+        draft.votes = {}
+        draft.winnerId = null
+        draft.votingEndsAt = Date.now() + draft.voteDurationSeconds * 1000
+      })
       return { status: 200, body: { room: roomPayload(room) } }
     }
 
     const suggestMatch = path.match(/^\/api\/rooms\/(\d{4})\/suggestions$/)
     if (suggestMatch && verb === 'POST') {
-      const room = await loadRoom(suggestMatch[1]!)
-      if (!room) return { status: 404, body: { error: 'Room not found' } }
-      if (room.phase !== 'lobby') {
-        return {
-          status: 400,
-          body: { error: 'Places are locked once voting starts' },
-        }
-      }
-      const member = room.members.find(
-        (m) => m.id === (typeof data.memberId === 'string' ? data.memberId : ''),
-      )
-      if (!member) {
-        return { status: 403, body: { error: 'Join the room first' } }
-      }
       const placeId =
         typeof data.placeId === 'string' ? data.placeId.trim() : ''
       if (!placeId) {
         return { status: 400, body: { error: 'placeId is required' } }
       }
-      if (room.suggestions.some((s) => s.placeId === placeId)) {
-        return { status: 200, body: { room: roomPayload(room) } }
-      }
-      if (room.suggestions.length >= MAX_SUGGESTIONS) {
-        return {
-          status: 400,
-          body: { error: `Room is full (max ${MAX_SUGGESTIONS} places)` },
+
+      const room = await mutateRoom(suggestMatch[1]!, (draft) => {
+        if (draft.phase !== 'lobby') {
+          throw new HttpError(400, 'Places are locked once voting starts')
         }
-      }
-      room.suggestions.push({
-        placeId,
-        addedById: member.id,
-        addedByName: member.name,
+        const member = draft.members.find(
+          (m) =>
+            m.id === (typeof data.memberId === 'string' ? data.memberId : ''),
+        )
+        if (!member) {
+          throw new HttpError(403, 'Join the room first')
+        }
+        if (draft.suggestions.some((s) => s.placeId === placeId)) {
+          return
+        }
+        if (draft.suggestions.length >= MAX_SUGGESTIONS) {
+          throw new HttpError(
+            400,
+            `Room is full (max ${MAX_SUGGESTIONS} places)`,
+          )
+        }
+        draft.suggestions.push({
+          placeId,
+          addedById: member.id,
+          addedByName: member.name,
+        })
       })
-      await saveRoom(room)
       return { status: 200, body: { room: roomPayload(room) } }
     }
 
     const voteMatch = path.match(/^\/api\/rooms\/(\d{4})\/vote$/)
     if (voteMatch && verb === 'POST') {
-      const room = await loadRoom(voteMatch[1]!)
-      if (!room) return { status: 404, body: { error: 'Room not found' } }
-      if (room.phase !== 'voting') {
-        return { status: 400, body: { error: 'Voting is not open' } }
-      }
-      const member = room.members.find(
-        (m) => m.id === (typeof data.memberId === 'string' ? data.memberId : ''),
-      )
-      if (!member) {
-        return { status: 403, body: { error: 'Join the room first' } }
-      }
-
       const placeId =
         data.placeId === null || data.placeId === undefined
           ? null
@@ -320,49 +340,62 @@ export async function handleRoomsRequest(
             ? data.placeId
             : null
 
-      if (!placeId) {
-        delete room.votes[member.id]
-        await saveRoom(room)
-        return { status: 200, body: { room: roomPayload(room) } }
-      }
+      const room = await mutateRoom(voteMatch[1]!, (draft) => {
+        finalizeIfExpired(draft)
+        if (draft.phase !== 'voting') {
+          throw new HttpError(400, 'Voting is not open')
+        }
+        const member = draft.members.find(
+          (m) =>
+            m.id === (typeof data.memberId === 'string' ? data.memberId : ''),
+        )
+        if (!member) {
+          throw new HttpError(403, 'Join the room first')
+        }
 
-      if (!room.suggestions.some((s) => s.placeId === placeId)) {
-        return { status: 400, body: { error: 'Place is not in this room' } }
-      }
+        if (!placeId) {
+          delete draft.votes[member.id]
+          return
+        }
 
-      room.votes[member.id] = placeId
-      await saveRoom(room)
+        if (!draft.suggestions.some((s) => s.placeId === placeId)) {
+          throw new HttpError(400, 'Place is not in this room')
+        }
+
+        draft.votes[member.id] = placeId
+      })
       return { status: 200, body: { room: roomPayload(room) } }
     }
 
     const revealMatch = path.match(/^\/api\/rooms\/(\d{4})\/reveal$/)
     if (revealMatch && verb === 'POST') {
-      const room = await loadRoom(revealMatch[1]!)
-      if (!room) return { status: 404, body: { error: 'Room not found' } }
-      if (room.suggestions.length === 0) {
-        return {
-          status: 400,
-          body: { error: 'Add at least one place first' },
+      const room = await mutateRoom(revealMatch[1]!, (draft) => {
+        if (draft.suggestions.length === 0) {
+          throw new HttpError(400, 'Add at least one place first')
         }
-      }
-      if (!requireHost(room, typeof data.memberId === 'string' ? data.memberId : undefined)) {
-        return {
-          status: 403,
-          body: { error: 'Only the host can end voting early' },
+        if (
+          !requireHost(
+            draft,
+            typeof data.memberId === 'string' ? data.memberId : undefined,
+          )
+        ) {
+          throw new HttpError(403, 'Only the host can end voting early')
         }
-      }
-      if (room.phase === 'lobby') {
-        return { status: 400, body: { error: 'Start voting first' } }
-      }
-      room.phase = 'results'
-      room.votingEndsAt = Date.now()
-      room.winnerId = pickWinner(room)
-      await saveRoom(room)
+        if (draft.phase === 'lobby') {
+          throw new HttpError(400, 'Start voting first')
+        }
+        draft.phase = 'results'
+        draft.votingEndsAt = Date.now()
+        draft.winnerId = pickWinner(draft)
+      })
       return { status: 200, body: { room: roomPayload(room) } }
     }
 
     return { status: 404, body: { error: 'Not found' } }
   } catch (error) {
+    if (error instanceof HttpError) {
+      return { status: error.status, body: { error: error.message } }
+    }
     return {
       status: 500,
       body: {
