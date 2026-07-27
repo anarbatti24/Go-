@@ -37,6 +37,8 @@ interface AppState {
   getSavedPlaces: () => Place[]
   setUserLocation: (location: string) => void
   setPlaces: (places: Place[], message?: string | null) => void
+  /** Merge remote place snapshots (e.g. friends' room suggestions) into catalog. */
+  mergePlaces: (incoming: Place[]) => void
   setPlacesStatus: (
     status: AppState['placesStatus'],
     message?: string | null,
@@ -110,6 +112,21 @@ export const useStore = create<AppState>((set, get) => ({
       places,
       placesStatus: 'ready',
       placesMessage: message,
+    }),
+
+  mergePlaces: (incoming) =>
+    set((state) => {
+      if (incoming.length === 0) return state
+      const byId = new Map(state.places.map((p) => [p.id, p]))
+      let changed = false
+      for (const place of incoming) {
+        if (!byId.has(place.id)) {
+          byId.set(place.id, place)
+          changed = true
+        }
+      }
+      if (!changed) return state
+      return { places: Array.from(byId.values()) }
     }),
 
   setPlacesStatus: (status, message = null) =>

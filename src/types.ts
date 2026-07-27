@@ -63,6 +63,11 @@ export interface EventSuggestion {
   placeId: string
   addedById: string
   addedByName: string
+  /**
+   * Full place snapshot so every client can render it — friends don't share
+   * the same local Feed/My Roams catalog.
+   */
+  place?: Place
 }
 
 /** Kahoot-style room phases: wait → timed vote → results. */

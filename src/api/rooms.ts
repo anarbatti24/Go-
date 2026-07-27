@@ -5,7 +5,7 @@
  * is mostly a URL / auth change. Every mutating call returns the fresh room.
  */
 
-import type { EventRoom } from '../types'
+import type { EventRoom, Place } from '../types'
 
 export type RoomView = EventRoom & {
   tallies: Record<string, number>
@@ -99,10 +99,11 @@ export async function addSuggestion(
   code: string,
   memberId: string,
   placeId: string,
+  place?: Place,
 ): Promise<RoomView> {
   const data = await request(`/api/rooms/${code}/suggestions`, {
     method: 'POST',
-    body: JSON.stringify({ memberId, placeId }),
+    body: JSON.stringify({ memberId, placeId, place }),
   })
   return data.room
 }

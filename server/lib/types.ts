@@ -14,6 +14,8 @@ export interface EventSuggestion {
   placeId: string
   addedById: string
   addedByName: string
+  /** Full place snapshot so every client can render without a shared catalog. */
+  place?: Place
 }
 
 export interface EventRoom {

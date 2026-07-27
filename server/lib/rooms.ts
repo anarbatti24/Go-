@@ -6,7 +6,7 @@
  */
 
 import { getRoomStore } from './roomStore.js'
-import type { ApiResult, EventMember, EventRoom, EventSuggestion } from './types.js'
+import type { ApiResult, EventMember, EventRoom, EventSuggestion, Place } from './types.js'
 
 export const MAX_SUGGESTIONS = 8
 export const MIN_VOTE_SECONDS = 10
@@ -19,6 +19,12 @@ class HttpError extends Error {
     super(message)
     this.status = status
   }
+}
+
+function isPlaceSnapshot(value: unknown): value is Place {
+  if (!value || typeof value !== 'object') return false
+  const p = value as Record<string, unknown>
+  return typeof p.id === 'string' && typeof p.name === 'string'
 }
 
 function newId(): string {
@@ -302,6 +308,8 @@ export async function handleRoomsRequest(
         return { status: 400, body: { error: 'placeId is required' } }
       }
 
+      const placeSnapshot = isPlaceSnapshot(data.place) ? data.place : undefined
+
       const room = await mutateRoom(suggestMatch[1]!, (draft) => {
         if (draft.phase !== 'lobby') {
           throw new HttpError(400, 'Places are locked once voting starts')
@@ -313,7 +321,10 @@ export async function handleRoomsRequest(
         if (!member) {
           throw new HttpError(403, 'Join the room first')
         }
-        if (draft.suggestions.some((s) => s.placeId === placeId)) {
+        const existing = draft.suggestions.find((s) => s.placeId === placeId)
+        if (existing) {
+          // Backfill snapshot if an older client added id-only
+          if (!existing.place && placeSnapshot) existing.place = placeSnapshot
           return
         }
         if (draft.suggestions.length >= MAX_SUGGESTIONS) {
@@ -326,6 +337,7 @@ export async function handleRoomsRequest(
           placeId,
           addedById: member.id,
           addedByName: member.name,
+          place: placeSnapshot,
         })
       })
       return { status: 200, body: { room: roomPayload(room) } }

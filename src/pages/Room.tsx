@@ -36,6 +36,7 @@ import { Modal } from '../components/Modal'
 import { useStore } from '../store/useStore'
 import { getRoomMemberId } from '../utils/session'
 import { priceLabel } from '../utils/price'
+import type { Place } from '../types'
 
 const POLL_MS = 1000
 const TIMER_PRESETS = [15, 30, 45, 60] as const
@@ -44,6 +45,7 @@ export function Room() {
   const { code = '' } = useParams<{ code: string }>()
   const places = useStore((s) => s.places)
   const getSavedPlaces = useStore((s) => s.getSavedPlaces)
+  const mergePlaces = useStore((s) => s.mergePlaces)
   const savedPlaces = getSavedPlaces()
 
   const [room, setRoom] = useState<RoomView | null>(null)
@@ -65,13 +67,17 @@ export function Room() {
     if (!/^\d{4}$/.test(code)) return
     try {
       const next = await fetchRoom(code)
+      const snapshots = next.suggestions
+        .map((s) => s.place)
+        .filter((p): p is Place => Boolean(p))
+      if (snapshots.length > 0) mergePlaces(snapshots)
       setRoom(next)
       setSkewMs(Date.now() - next.serverNow)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load room')
     }
-  }, [code])
+  }, [code, mergePlaces])
 
   useEffect(() => {
     void refresh()
@@ -103,7 +109,10 @@ export function Room() {
     if (!room) return []
     return room.suggestions
       .map((suggestion) => {
-        const place = places.find((p) => p.id === suggestion.placeId)
+        const place =
+          suggestion.place ??
+          places.find((p) => p.id === suggestion.placeId) ??
+          null
         if (!place) return null
         return { suggestion, place }
       })
@@ -155,11 +164,15 @@ export function Room() {
     }
   }
 
-  const handleAdd = async (placeId: string) => {
+  const handleAdd = async (place: Place) => {
     if (!memberId || busy) return
     setBusy(true)
     try {
-      const next = await addSuggestion(code, memberId, placeId)
+      const next = await addSuggestion(code, memberId, place.id, place)
+      const snapshots = next.suggestions
+        .map((s) => s.place)
+        .filter((p): p is Place => Boolean(p))
+      if (snapshots.length > 0) mergePlaces(snapshots)
       setRoom(next)
       setAddOpen(false)
     } catch (err) {
@@ -244,7 +257,8 @@ export function Room() {
   }
 
   const winner = room.winnerId
-    ? places.find((p) => p.id === room.winnerId)
+    ? room.suggestions.find((s) => s.placeId === room.winnerId)?.place ??
+      places.find((p) => p.id === room.winnerId)
     : null
   const showTallies = room.phase === 'results'
   const canVote = room.phase === 'voting'
@@ -620,7 +634,7 @@ export function Room() {
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void handleAdd(place.id)}
+                    onClick={() => void handleAdd(place)}
                     className="flex w-full items-center gap-3 rounded-xl bg-gray-50 p-2.5 text-left transition hover:bg-gray-100"
                   >
                     <img
