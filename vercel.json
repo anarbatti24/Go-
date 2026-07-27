@@ -3,6 +3,21 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/api/rooms/:code/:action",
+      "destination": "/api/rooms-api?code=:code&action=:action"
+    },
+    {
+      "source": "/api/rooms/:code",
+      "destination": "/api/rooms-api?code=:code"
+    },
+    {
+      "source": "/api/rooms",
+      "destination": "/api/rooms-api"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ]
 }

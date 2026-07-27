@@ -23,7 +23,17 @@ async function request(
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
   })
-  const data = (await res.json()) as RoomResponse & { error?: string }
+
+  const raw = await res.text()
+  let data: RoomResponse & { error?: string }
+  try {
+    data = JSON.parse(raw) as RoomResponse & { error?: string }
+  } catch {
+    throw new Error(
+      `Rooms API returned non-JSON (${res.status}). Check that /api/rooms is deployed and Upstash env vars are set.`,
+    )
+  }
+
   if (!res.ok) {
     throw new Error(data.error || `Request failed (${res.status})`)
   }
