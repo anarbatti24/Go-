@@ -5,7 +5,7 @@
 
 import type { ServerResponse } from 'node:http'
 import { loadEnv, type Plugin } from 'vite'
-import { handleDiscover } from './lib/discover.ts'
+import { handleDiscover } from './lib/discover.js'
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status

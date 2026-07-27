@@ -2,7 +2,7 @@
  * Yelp + TMDB discovery — shared by Vite plugin and Vercel `/api/discover`.
  */
 
-import type { ApiResult, Place } from './types.ts'
+import type { ApiResult, Place } from './types.js'
 
 const TOTAL_LIMIT = 30
 const YELP_LIMIT = 20

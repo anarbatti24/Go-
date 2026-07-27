@@ -5,7 +5,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
-import { handleRoomsRequest } from './lib/rooms.ts'
+import { handleRoomsRequest } from './lib/rooms.js'
 
 function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {

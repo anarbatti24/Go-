@@ -2,8 +2,8 @@
  * Room REST handlers — shared by Vite middleware and Vercel `/api/rooms`.
  */
 
-import { getRoomStore } from './roomStore.ts'
-import type { ApiResult, EventMember, EventRoom, EventSuggestion } from './types.ts'
+import { getRoomStore } from './roomStore.js'
+import type { ApiResult, EventMember, EventRoom, EventSuggestion } from './types.js'
 
 export const MAX_SUGGESTIONS = 8
 export const MIN_VOTE_SECONDS = 10

@@ -1,12 +1,11 @@
 /**
- * Room persistence — Upstash Redis in production, in-memory for local dev.
+ * Room persistence — Upstash Redis REST (fetch) in production, memory locally.
  *
+ * Uses raw HTTP so we don't depend on @upstash/redis loading in Vercel.
  * Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN on Vercel.
- * Without them, rooms live in a process Map (fine for `npm run dev` only).
  */
 
-import { Redis } from '@upstash/redis'
-import type { EventRoom } from './types.ts'
+import type { EventRoom } from './types.js'
 
 const ROOM_TTL_SECONDS = 60 * 60 * 24 // 24h
 const KEY_PREFIX = 'go:room:'
@@ -19,7 +18,6 @@ export interface RoomStore {
 }
 
 declare global {
-  // Persist rooms across Vite HMR in local memory mode.
   var __goRoomsMemory: Map<string, EventRoom> | undefined
 }
 
@@ -46,19 +44,69 @@ function createMemoryStore(): RoomStore {
   }
 }
 
-function createRedisStore(redis: Redis): RoomStore {
+async function upstashCommand(
+  baseUrl: string,
+  token: string,
+  command: unknown[],
+): Promise<unknown> {
+  const res = await fetch(baseUrl.replace(/\/$/, ''), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(command),
+  })
+
+  const raw = await res.text()
+  let parsed: { result?: unknown; error?: string }
+  try {
+    parsed = JSON.parse(raw) as { result?: unknown; error?: string }
+  } catch {
+    throw new Error(`Upstash returned non-JSON (${res.status}): ${raw.slice(0, 120)}`)
+  }
+
+  if (!res.ok || parsed.error) {
+    throw new Error(parsed.error || `Upstash error (${res.status})`)
+  }
+
+  return parsed.result
+}
+
+function createRedisStore(baseUrl: string, token: string): RoomStore {
   return {
     backend: 'redis',
     async get(code) {
-      const data = await redis.get<EventRoom>(`${KEY_PREFIX}${code}`)
-      return data ?? null
+      const result = await upstashCommand(baseUrl, token, [
+        'GET',
+        `${KEY_PREFIX}${code}`,
+      ])
+      if (result == null) return null
+      if (typeof result === 'string') {
+        try {
+          return JSON.parse(result) as EventRoom
+        } catch {
+          return null
+        }
+      }
+      // Upstash may auto-deserialize JSON objects
+      return result as EventRoom
     },
     async set(code, room) {
-      await redis.set(`${KEY_PREFIX}${code}`, room, { ex: ROOM_TTL_SECONDS })
+      await upstashCommand(baseUrl, token, [
+        'SET',
+        `${KEY_PREFIX}${code}`,
+        JSON.stringify(room),
+        'EX',
+        ROOM_TTL_SECONDS,
+      ])
     },
     async has(code) {
-      const exists = await redis.exists(`${KEY_PREFIX}${code}`)
-      return exists === 1
+      const result = await upstashCommand(baseUrl, token, [
+        'EXISTS',
+        `${KEY_PREFIX}${code}`,
+      ])
+      return result === 1 || result === true
     },
   }
 }
@@ -72,10 +120,15 @@ export function getRoomStore(): RoomStore {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim()
 
   if (url && token) {
-    cached = createRedisStore(new Redis({ url, token }))
+    cached = createRedisStore(url, token)
   } else {
     cached = createMemoryStore()
   }
 
   return cached
+}
+
+/** Reset cache between tests / hot reloads if needed. */
+export function resetRoomStoreCache() {
+  cached = null
 }
