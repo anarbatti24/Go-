@@ -1,53 +1,95 @@
 /**
- * Groups (`/groups`) — create crews and start planning
+ * Groups (`/groups`) — create crews and share a join code
  *
- * Vision: Go! isn't only solo discovery. Groups turn saved places into a shared
- * decision. Tap a group → Event Setup (shortlist) → Voting (pick a winner).
- *
- * Today members are free-text names (comma-separated). Later you might swap that
- * for contacts / auth users; the Group model already stores `members: string[]`.
+ * Vision: creating a group immediately spins up a live room with a 4-digit code
+ * you can share. Friends join via code/link, add roams, and vote together.
  */
 
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { Plus, Users } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Hash, Plus, Users } from 'lucide-react'
+import { createRoom } from '../api/rooms'
 import { Modal } from '../components/Modal'
 import { useStore } from '../store/useStore'
+import { createId } from '../utils/id'
+import {
+  getDisplayName,
+  setDisplayName,
+  setRoomMemberId,
+} from '../utils/session'
 
 /** List of groups + floating create affordance. */
 export function Groups() {
+  const navigate = useNavigate()
   const groups = useStore((s) => s.groups)
   const addGroup = useStore((s) => s.addGroup)
 
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
+  const [hostName, setHostName] = useState(getDisplayName())
   /** Raw comma-separated member input before we split it for the store */
   const [members, setMembers] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   /**
-   * Persist a new group, then reset the form so the next create starts clean.
-   * Requires a non-empty name; members are optional.
+   * Create the group + live room together, then open the room so the host can
+   * copy the 4-digit code / invite link right away.
    */
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return
-    addGroup(
-      name,
-      members
+    const groupName = name.trim()
+    const you = hostName.trim() || 'Host'
+    if (!groupName) return
+
+    setBusy(true)
+    setError(null)
+    try {
+      const memberList = members
         .split(',')
         .map((m) => m.trim())
-        .filter(Boolean),
-    )
-    setName('')
-    setMembers('')
-    setOpen(false)
+        .filter(Boolean)
+
+      const { room, memberId } = await createRoom({
+        groupId: createId(),
+        groupName,
+        hostName: you,
+        placeIds: [],
+      })
+
+      setDisplayName(you)
+      setRoomMemberId(room.code, memberId)
+      addGroup(groupName, memberList, room.code)
+
+      setName('')
+      setMembers('')
+      setOpen(false)
+      navigate(`/room/${room.code}`)
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not create group. Is the Go! server running?',
+      )
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <div className="relative min-h-full">
       <header className="mb-5">
         <h1 className="text-2xl font-bold text-gray-900">Groups</h1>
-        <p className="mt-1 text-sm text-muted">Plan hangouts and vote on where to go.</p>
+        <p className="mt-1 text-sm text-muted">
+          Create a group to get a shareable 4-digit code.
+        </p>
+        <Link
+          to="/join"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-primary shadow-sm ring-1 ring-black/5 transition hover:shadow-md"
+        >
+          <Hash className="h-4 w-4" />
+          Join with code
+        </Link>
       </header>
 
       {groups.length === 0 ? (
@@ -60,9 +102,8 @@ export function Groups() {
         <ul className="space-y-3 pb-20">
           {groups.map((group) => (
             <li key={group.id}>
-              {/* Enter the planning stack for this crew */}
               <Link
-                to={`/event/${group.id}`}
+                to={`/room/${group.roomCode}`}
                 className="flex items-center justify-between rounded-2xl bg-surface px-4 py-4 shadow-sm ring-1 ring-black/5 transition hover:shadow-md"
               >
                 <div>
@@ -71,18 +112,23 @@ export function Groups() {
                     {group.members.length}{' '}
                     {group.members.length === 1 ? 'member' : 'members'}
                   </p>
+                  <p className="mt-1 font-mono text-sm font-semibold tracking-widest text-primary">
+                    Code {group.roomCode}
+                  </p>
                 </div>
-                <span className="text-sm font-medium text-primary">Set up →</span>
+                <span className="text-sm font-medium text-primary">Open →</span>
               </Link>
             </li>
           ))}
         </ul>
       )}
 
-      {/* Sticky FAB stays reachable while scrolling the list */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setError(null)
+          setOpen(true)
+        }}
         className="sticky bottom-24 z-30 ml-auto mt-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg transition hover:bg-primary-dark"
         aria-label="Create group"
       >
@@ -90,10 +136,12 @@ export function Groups() {
       </button>
 
       {open ? (
-        <Modal title="New Group" onClose={() => setOpen(false)}>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <Modal title="New Group" onClose={() => !busy && setOpen(false)}>
+          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
             <label className="block">
-              <span className="mb-1.5 block text-sm font-medium text-gray-700">Group name</span>
+              <span className="mb-1.5 block text-sm font-medium text-gray-700">
+                Group name
+              </span>
               <input
                 type="text"
                 value={name}
@@ -105,21 +153,42 @@ export function Groups() {
             </label>
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium text-gray-700">
-                Members (comma-separated)
+                Your name (host)
+              </span>
+              <input
+                type="text"
+                value={hostName}
+                onChange={(e) => setHostName(e.target.value)}
+                placeholder="Alex"
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none ring-primary focus:ring-2"
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-gray-700">
+                Friends (comma-separated, optional)
               </span>
               <input
                 type="text"
                 value={members}
                 onChange={(e) => setMembers(e.target.value)}
-                placeholder="Alex, Jordan, Sam"
+                placeholder="Jordan, Sam"
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none ring-primary focus:ring-2"
               />
             </label>
+
+            {error ? (
+              <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </p>
+            ) : null}
+
             <button
               type="submit"
-              className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white transition hover:bg-primary-dark"
+              disabled={busy}
+              className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white transition hover:bg-primary-dark disabled:opacity-50"
             >
-              Save Group
+              {busy ? 'Creating…' : 'Create Group'}
             </button>
           </form>
         </Modal>

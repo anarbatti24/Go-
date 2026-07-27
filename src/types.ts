@@ -2,40 +2,90 @@
  * Go! — core TypeScript models
  *
  * Vision: Go! is a social discovery app for finding places ("roams") and deciding
- * where to hang out with friends. Everything is local for now (no backend/auth),
- * so these types are the contract the whole UI + Zustand store share.
- *
- * When you later add an API, keep these shapes as the client-side models and map
- * server DTOs into them so the screens barely need to change.
+ * where to hang out with friends. Discovery content comes from Yelp (nearby food /
+ * activities) + TMDB (movies), with a sample fallback when API keys aren't set.
  */
 
+/** Where a catalog item came from. */
+export type PlaceSource = 'yelp' | 'tmdb' | 'sample'
+
 /**
- * A discoverable place shown in the Reels-style Feed and saved into My Roams.
- * `price` is a 1–4 money-bag scale (not a dollar amount) — see `utils/price.ts`.
- * `image` currently points at picsum.photos portrait URLs for a phone-first look.
+ * A discoverable place / activity / movie shown in the Reels-style Feed.
+ * `price` is a 1–4 money-bag scale for venues; movies often leave it null and
+ * lean on `rating` + `runtimeMinutes` instead.
  */
 export interface Place {
   id: string
   name: string
   description: string
   image: string
-  /** Relative cost vibe: 1 = cheap, 4 = splurge */
-  price: 1 | 2 | 3 | 4
-  /** Human-readable distance string, e.g. "0.4 mi" */
+  /** Relative cost vibe: 1 = cheap, 4 = splurge. Null when unknown / N/A. */
+  price: 1 | 2 | 3 | 4 | null
+  /** Human-readable distance (Yelp) or label like "In theaters" (TMDB). */
   distance: string
-  /** Street / venue address shown in detail views */
+  /** Address, city, or theater-friendly label. */
   location: string
-  /** Soft taxonomy for the reel overlay (Café, Nightlife, Outdoors, …) */
+  /** Cuisine / venue type (Yelp) or primary genre (TMDB). */
   category: string
+  source: PlaceSource
+  /** Yelp ~1–5 or TMDB ~0–10 */
+  rating?: number
+  /** Extra genres (movies) or secondary Yelp categories */
+  genres?: string[]
+  /** Movie runtime in minutes */
+  runtimeMinutes?: number
+  /** Primary food type from Yelp, e.g. "Mexican" */
+  cuisine?: string
 }
 
 /**
  * A friend group that plans an outing together.
- * Creating a group unlocks Event Setup → Voting for that crew.
- * `members` is a simple string list today; later this could become user IDs.
+ * Creating a group immediately opens a live room with a 4-digit `roomCode`
+ * friends can join. `members` is a simple string list today.
  */
 export interface Group {
   id: string
   name: string
   members: string[]
+  /** Live room code from the rooms API — share this to invite friends. */
+  roomCode: string
+}
+
+/** Someone who has joined a live event room. */
+export interface EventMember {
+  id: string
+  name: string
+  isHost: boolean
+}
+
+/** A place suggested into the shared event pool. */
+export interface EventSuggestion {
+  placeId: string
+  addedById: string
+  addedByName: string
+}
+
+/** Kahoot-style room phases: wait → timed vote → results. */
+export type RoomPhase = 'lobby' | 'voting' | 'results'
+
+/**
+ * Shared event room — friends join via 4-digit code or `/join/:code` link,
+ * add roams in the lobby, then the host starts a timed voting round.
+ */
+export interface EventRoom {
+  code: string
+  groupId: string
+  groupName: string
+  hostId: string
+  members: EventMember[]
+  suggestions: EventSuggestion[]
+  /** memberId → placeId */
+  votes: Record<string, string>
+  winnerId: string | null
+  phase: RoomPhase
+  /** How long voting lasts once the host starts (seconds). */
+  voteDurationSeconds: number
+  /** Epoch ms when voting ends; null while still in lobby. */
+  votingEndsAt: number | null
+  createdAt: number
 }

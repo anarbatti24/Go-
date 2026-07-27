@@ -1,12 +1,5 @@
 /**
  * My Roams (`/roams`) — personal saved-place library
- *
- * Vision: after discovering places in the Feed, users land here to revisit what
- * they hearted. Think of it as a private wishlist that later feeds Event Setup
- * when a group needs candidate venues.
- *
- * Empty state is intentional and encouraging — Go! only works if people explore
- * first, so we nudge them back to the Feed instead of showing a blank void.
  */
 
 import { useState } from 'react'
@@ -15,17 +8,14 @@ import { Modal } from '../components/Modal'
 import { PlaceCard } from '../components/PlaceCard'
 import { useStore } from '../store/useStore'
 import type { Place } from '../types'
-import { priceLabel } from '../utils/price'
+import { priceLabel, ratingLabel, runtimeLabel } from '../utils/price'
 
-/** Grid of saved places with an optional details modal on tap. */
 export function Roams() {
-  // Subscribe to savedIds so this screen updates when hearts change
   const savedIds = useStore((s) => s.savedIds)
   const toggleSave = useStore((s) => s.toggleSave)
   const getSavedPlaces = useStore((s) => s.getSavedPlaces)
   const savedPlaces = getSavedPlaces()
 
-  /** Which place's detail sheet is open (null = closed). */
   const [selected, setSelected] = useState<Place | null>(null)
 
   return (
@@ -38,7 +28,9 @@ export function Roams() {
       {savedPlaces.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl bg-surface px-6 py-16 text-center shadow-sm ring-1 ring-black/5">
           <p className="text-base font-medium text-gray-800">No roams yet. Start exploring!</p>
-          <p className="mt-2 text-sm text-muted">Tap the heart on Feed cards to save places here.</p>
+          <p className="mt-2 text-sm text-muted">
+            Tap the heart on Feed cards to save places here.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
@@ -54,7 +46,6 @@ export function Roams() {
         </div>
       )}
 
-      {/* Detail sheet — richer copy than the compact card can show */}
       {selected ? (
         <Modal title={selected.name} onClose={() => setSelected(null)}>
           <img
@@ -62,27 +53,64 @@ export function Roams() {
             alt={selected.name}
             className="mb-4 h-44 w-full rounded-xl object-cover"
           />
-          <p className="text-sm leading-relaxed text-gray-700">{selected.description}</p>
+          <p className="text-sm leading-relaxed text-gray-700">
+            {selected.description}
+          </p>
           <dl className="mt-4 space-y-2 text-sm">
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Price</dt>
-              <dd className="font-medium">{priceLabel(selected.price)}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Distance</dt>
-              <dd className="font-medium">{selected.distance}</dd>
-            </div>
-            <div className="flex items-start justify-between gap-3">
-              <dt className="text-muted">Location</dt>
-              <dd className="flex items-center gap-1 text-right font-medium">
-                <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
-                {selected.location}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Category</dt>
-              <dd className="font-medium">{selected.category}</dd>
-            </div>
+            {selected.source === 'tmdb' ? (
+              <>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Rating</dt>
+                  <dd className="font-medium">
+                    {ratingLabel(selected.rating, selected.source) ?? '—'}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Runtime</dt>
+                  <dd className="font-medium">
+                    {runtimeLabel(selected.runtimeMinutes) ?? '—'}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Genres</dt>
+                  <dd className="text-right font-medium">
+                    {(selected.genres ?? [selected.category]).join(', ')}
+                  </dd>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Price</dt>
+                  <dd className="font-medium">{priceLabel(selected.price)}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Distance</dt>
+                  <dd className="font-medium">{selected.distance}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Type</dt>
+                  <dd className="font-medium">
+                    {selected.cuisine || selected.category}
+                  </dd>
+                </div>
+                {selected.rating != null ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted">Rating</dt>
+                    <dd className="font-medium">
+                      {ratingLabel(selected.rating, selected.source)}
+                    </dd>
+                  </div>
+                ) : null}
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="text-muted">Location</dt>
+                  <dd className="flex items-center gap-1 text-right font-medium">
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    {selected.location}
+                  </dd>
+                </div>
+              </>
+            )}
           </dl>
         </Modal>
       ) : null}

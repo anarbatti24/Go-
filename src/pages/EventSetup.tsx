@@ -1,24 +1,23 @@
 /**
- * Event Setup (`/event/:groupId`) — shortlist places for a group vote
+ * Event Setup (`/event/:groupId`) — shortlist places, then open a live room
  *
- * Vision: before friends vote, someone curates a small set of options from My
- * Roams. Too many choices kill momentum; too few isn't a real vote. We allow
- * 2–5 places — enough to debate, not enough to overwhelm.
- *
- * This screen bridges Groups → Voting:
- *   1. Load the group from the URL param
- *   2. Show only saved places (you can't vote on places nobody bookmarked)
- *   3. On "Start Vote", push the selection into the store and navigate to `/vote`
+ * Vision: the host seeds a few options from My Roams (0–5), then Start Event
+ * creates a shareable 4-digit room. Friends join via code/link and can add more
+ * roams before everyone votes.
  */
 
 import { useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Check } from 'lucide-react'
+import { createRoom } from '../api/rooms'
 import { useStore } from '../store/useStore'
+import {
+  getDisplayName,
+  setDisplayName,
+  setRoomMemberId,
+} from '../utils/session'
 import { priceLabel } from '../utils/price'
 
-/** Minimum / maximum places allowed in one voting round. */
-const MIN_SELECTION = 2
 const MAX_SELECTION = 5
 
 /** Checkbox list of saved places for the active group. */
@@ -27,26 +26,22 @@ export function EventSetup() {
   const navigate = useNavigate()
   const groups = useStore((s) => s.groups)
   const getSavedPlaces = useStore((s) => s.getSavedPlaces)
-  const setVotingPlaces = useStore((s) => s.setVotingPlaces)
   const savedPlaces = getSavedPlaces()
 
-  /** Resolve the group from the route; invalid ids bounce back to Groups. */
   const group = useMemo(
     () => groups.find((g) => g.id === groupId),
     [groups, groupId],
   )
 
-  /** Local UI selection before we commit it to the voting session. */
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [hostName, setHostName] = useState(getDisplayName() || 'Host')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   if (!group) {
     return <Navigate to="/groups" replace />
   }
 
-  /**
-   * Toggle a place in the shortlist.
-   * Caps at MAX_SELECTION so the Start Vote button's contract stays honest.
-   */
   const togglePlace = (id: string) => {
     setSelectedIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
@@ -55,14 +50,30 @@ export function EventSetup() {
     })
   }
 
-  const canStart =
-    selectedIds.length >= MIN_SELECTION && selectedIds.length <= MAX_SELECTION
+  const handleStart = async () => {
+    const name = hostName.trim()
+    if (!name) {
+      setError('Enter your name so friends know who started the room')
+      return
+    }
 
-  /** Commit selection to the store and open the Voting screen. */
-  const handleStart = () => {
-    if (!canStart) return
-    setVotingPlaces(selectedIds)
-    navigate('/vote')
+    setBusy(true)
+    setError(null)
+    try {
+      const { room, memberId } = await createRoom({
+        groupId: group.id,
+        groupName: group.name,
+        hostName: name,
+        placeIds: selectedIds,
+      })
+      setDisplayName(name)
+      setRoomMemberId(room.code, memberId)
+      navigate(`/room/${room.code}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start event')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -75,25 +86,41 @@ export function EventSetup() {
           <ArrowLeft className="h-4 w-4" />
           Groups
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Event Setup</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Start Event</h1>
         <p className="mt-1 text-sm text-muted">
-          Pick {MIN_SELECTION}–{MAX_SELECTION} saved places for{' '}
-          <span className="font-medium text-gray-800">{group.name}</span>.
+          Seed up to {MAX_SELECTION} places for{' '}
+          <span className="font-medium text-gray-800">{group.name}</span>. Friends
+          can add more after they join.
         </p>
         <p className="mt-2 text-xs font-medium text-primary">
           {selectedIds.length} selected
         </p>
       </header>
 
+      <label className="mb-5 block">
+        <span className="mb-1.5 block text-sm font-medium text-gray-700">
+          Your name (shown as host)
+        </span>
+        <input
+          type="text"
+          value={hostName}
+          onChange={(e) => setHostName(e.target.value)}
+          placeholder="Alex"
+          className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none ring-primary focus:ring-2"
+        />
+      </label>
+
       {savedPlaces.length === 0 ? (
         <div className="rounded-2xl bg-surface px-6 py-12 text-center shadow-sm ring-1 ring-black/5">
           <p className="font-medium text-gray-800">No saved places yet</p>
-          <p className="mt-1 text-sm text-muted">Save places from Feed before starting a vote.</p>
+          <p className="mt-1 text-sm text-muted">
+            You can still start an empty room — friends add from their roams.
+          </p>
           <Link
             to="/"
-            className="mt-4 inline-block rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white"
+            className="mt-4 inline-block text-sm font-semibold text-primary"
           >
-            Go to Feed
+            Or save places from Feed →
           </Link>
         </div>
       ) : (
@@ -141,14 +168,18 @@ export function EventSetup() {
         </ul>
       )}
 
+      {error ? (
+        <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      ) : null}
+
       <div className="sticky bottom-4 mt-6">
         <button
           type="button"
-          disabled={!canStart}
-          onClick={handleStart}
+          disabled={busy}
+          onClick={() => void handleStart()}
           className="w-full rounded-xl bg-primary py-3.5 text-sm font-semibold text-white shadow-lg transition enabled:hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Start Vote
+          {busy ? 'Creating room…' : 'Start Event'}
         </button>
       </div>
     </div>

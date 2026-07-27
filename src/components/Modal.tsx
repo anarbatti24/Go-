@@ -1,17 +1,16 @@
 /**
  * Modal — reusable overlay dialog
  *
- * Vision: keep interruptions lightweight. We use this for:
- *   - Place details on My Roams
- *   - "New Group" creation form
- *
- * Backdrop tap closes; inner panel stops propagation so content clicks don't
- * dismiss by accident. Anchored to the bottom on narrow screens (thumb-friendly)
- * and centered on larger ones.
+ * Vision: keep interruptions lightweight inside the phone shell — not the full
+ * desktop viewport. Portals into `#go-phone-shell` so overlays stay in the
+ * mobile frame while still sitting above scrollable content.
  */
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
+
+export const PHONE_SHELL_ID = 'go-phone-shell'
 
 interface ModalProps {
   title: string
@@ -20,18 +19,26 @@ interface ModalProps {
   children: ReactNode
 }
 
+function getPhoneShell(): HTMLElement | null {
+  if (typeof document === 'undefined') return null
+  return document.getElementById(PHONE_SHELL_ID)
+}
+
 /**
  * Accessible dialog shell. Pass any form/content as `children`.
  * Parent owns open/close state — this component is presentational.
  */
 export function Modal({ title, onClose, children }: ModalProps) {
-  return (
+  const [mountNode] = useState(getPhoneShell)
+
+  if (!mountNode) return null
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className="absolute inset-0 z-[100] flex items-end justify-center bg-black/40 p-4 sm:items-center"
       onClick={onClose}
       role="presentation"
     >
-      {/* stopPropagation: clicking inside the sheet shouldn't close it */}
       <div
         className="w-full max-w-md rounded-2xl bg-surface p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -54,6 +61,7 @@ export function Modal({ title, onClose, children }: ModalProps) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    mountNode,
   )
 }

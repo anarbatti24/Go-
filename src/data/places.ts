@@ -25,6 +25,7 @@ export const samplePlaces: Place[] = [
     distance: '0.4 mi',
     location: '12 Pier Lane',
     category: 'Café',
+    source: 'sample',
   },
   {
     id: '2',
@@ -36,6 +37,7 @@ export const samplePlaces: Place[] = [
     distance: '0.8 mi',
     location: '88 Market Street',
     category: 'Asian',
+    source: 'sample',
   },
   {
     id: '3',
@@ -47,6 +49,7 @@ export const samplePlaces: Place[] = [
     distance: '3.2 mi',
     location: 'Ridge Road Trailhead',
     category: 'Outdoors',
+    source: 'sample',
   },
   {
     id: '4',
@@ -58,6 +61,7 @@ export const samplePlaces: Place[] = [
     distance: '1.1 mi',
     location: '45 Elm Court (ask for Velvet)',
     category: 'Nightlife',
+    source: 'sample',
   },
   {
     id: '5',
@@ -69,6 +73,7 @@ export const samplePlaces: Place[] = [
     distance: '0.6 mi',
     location: '210 Grove Avenue',
     category: 'Market',
+    source: 'sample',
   },
   {
     id: '6',
@@ -80,6 +85,7 @@ export const samplePlaces: Place[] = [
     distance: '2.0 mi',
     location: '500 Lane Drive',
     category: 'Entertainment',
+    source: 'sample',
   },
   {
     id: '7',
@@ -91,6 +97,7 @@ export const samplePlaces: Place[] = [
     distance: '1.4 mi',
     location: '77 Sol Street',
     category: 'Mexican',
+    source: 'sample',
   },
   {
     id: '8',
@@ -102,6 +109,7 @@ export const samplePlaces: Place[] = [
     distance: '1.7 mi',
     location: '19 Canvas Way',
     category: 'Arts',
+    source: 'sample',
   },
   {
     id: '9',
@@ -113,6 +121,7 @@ export const samplePlaces: Place[] = [
     distance: '2.5 mi',
     location: '301 Oak Boulevard',
     category: 'Fine Dining',
+    source: 'sample',
   },
   {
     id: '10',
@@ -124,6 +133,7 @@ export const samplePlaces: Place[] = [
     distance: '4.1 mi',
     location: '900 Coast Highway',
     category: 'Activity',
+    source: 'sample',
   },
   {
     id: '11',
@@ -135,6 +145,7 @@ export const samplePlaces: Place[] = [
     distance: '0.3 mi',
     location: '5 Maple Street',
     category: 'Bakery',
+    source: 'sample',
   },
   {
     id: '12',
@@ -146,6 +157,7 @@ export const samplePlaces: Place[] = [
     distance: '2.8 mi',
     location: '64 Ascend Road',
     category: 'Fitness',
+    source: 'sample',
   },
   {
     id: '13',
@@ -157,6 +169,7 @@ export const samplePlaces: Place[] = [
     distance: '1.9 mi',
     location: 'Plaza Central',
     category: 'Market',
+    source: 'sample',
   },
   {
     id: '14',
@@ -168,6 +181,7 @@ export const samplePlaces: Place[] = [
     distance: '1.2 mi',
     location: '28 Copper Lane',
     category: 'Bistro',
+    source: 'sample',
   },
   {
     id: '15',
@@ -179,6 +193,7 @@ export const samplePlaces: Place[] = [
     distance: '1.5 mi',
     location: '100 Reel Avenue',
     category: 'Entertainment',
+    source: 'sample',
   },
   {
     id: '16',
@@ -190,6 +205,7 @@ export const samplePlaces: Place[] = [
     distance: '2.3 mi',
     location: 'Riverbend Drive',
     category: 'Outdoors',
+    source: 'sample',
   },
   {
     id: '17',
@@ -201,6 +217,7 @@ export const samplePlaces: Place[] = [
     distance: '0.9 mi',
     location: '55 Spice Row',
     category: 'Indian',
+    source: 'sample',
   },
   {
     id: '18',
@@ -212,6 +229,7 @@ export const samplePlaces: Place[] = [
     distance: '1.6 mi',
     location: '12th Floor, 400 High Street',
     category: 'Nightlife',
+    source: 'sample',
   },
   {
     id: '19',
@@ -223,6 +241,7 @@ export const samplePlaces: Place[] = [
     distance: '0.7 mi',
     location: '33 Petal Court',
     category: 'Café',
+    source: 'sample',
   },
   {
     id: '20',
@@ -234,5 +253,6 @@ export const samplePlaces: Place[] = [
     distance: '2.1 mi',
     location: '150 Game Lane',
     category: 'Entertainment',
+    source: 'sample',
   },
 ]

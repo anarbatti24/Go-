@@ -6,15 +6,16 @@
  * bottom nav feel native. On small screens the shell goes edge-to-edge; on larger
  * screens it floats as a rounded device mockup.
  *
- * Bottom nav is hidden on Event Setup + Voting so those feel like a focused stack
- * flow (Groups → pick places → vote), not another tab.
+ * Bottom nav is hidden on Event Setup / Join / Room so those feel like a focused
+ * stack flow (Groups → start or join → vote), not another tab.
  */
 
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
+import { PHONE_SHELL_ID } from './Modal'
 
 /** Paths that should hide the tab bar (immersive / stack screens). */
-const hideNavPrefixes = ['/event/', '/vote']
+const hideNavPrefixes = ['/event/', '/join', '/room/']
 
 /**
  * Wraps every route: phone chrome + scrollable main + optional bottom nav.
@@ -31,6 +32,7 @@ export function Layout() {
     <div className="flex min-h-full justify-center bg-neutral-950">
       {/* Device frame — max width mimics a modern phone */}
       <div
+        id={PHONE_SHELL_ID}
         className={[
           'relative flex w-full flex-col overflow-hidden bg-[var(--color-bg)]',
           'max-w-[430px]',
