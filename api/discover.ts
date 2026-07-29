@@ -12,6 +12,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const location = String(req.query.location ?? '')
-  const result = await handleDiscover(location)
+  const radiusRaw = req.query.radiusMiles
+  const radiusMiles =
+    typeof radiusRaw === 'string' || typeof radiusRaw === 'number'
+      ? Number(radiusRaw)
+      : undefined
+  const result = await handleDiscover(location, undefined, { radiusMiles })
   res.status(result.status).json(result.body)
 }

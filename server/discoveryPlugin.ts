@@ -43,7 +43,13 @@ export function discoveryApiPlugin(): Plugin {
 
           const parsed = new URL(url, 'http://localhost')
           const location = (parsed.searchParams.get('location') || '').trim()
-          const result = await handleDiscover(location, { yelpKey, tmdbKey })
+          const radiusRaw = parsed.searchParams.get('radiusMiles')
+          const radiusMiles = radiusRaw ? Number(radiusRaw) : undefined
+          const result = await handleDiscover(
+            location,
+            { yelpKey, tmdbKey },
+            { radiusMiles },
+          )
           sendJson(res, result.status, result.body)
         } catch (error) {
           sendJson(res, 500, {

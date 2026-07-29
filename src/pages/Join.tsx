@@ -3,13 +3,15 @@
  *
  * Vision: friends who weren't the host shouldn't need to recreate a group.
  * They open the invite link (or type the code), pick a display name, and land
- * in the shared room to add roams + vote.
+ * in the shared room. Joining also saves the group locally so it shows up
+ * under Groups later — same as creating one.
  */
 
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { joinRoom } from '../api/rooms'
+import { useStore } from '../store/useStore'
 import {
   getDisplayName,
   setDisplayName,
@@ -19,6 +21,7 @@ import {
 export function Join() {
   const { code: codeParam } = useParams<{ code?: string }>()
   const navigate = useNavigate()
+  const addGroup = useStore((s) => s.addGroup)
 
   const [code, setCode] = useState(codeParam ?? '')
   const [name, setName] = useState(getDisplayName())
@@ -41,9 +44,15 @@ export function Join() {
     setBusy(true)
     setError(null)
     try {
-      const { memberId } = await joinRoom(cleanCode, cleanName)
+      const { room, memberId } = await joinRoom(cleanCode, cleanName)
       setDisplayName(cleanName)
       setRoomMemberId(cleanCode, memberId)
+      addGroup(
+        room.groupName,
+        room.members.map((m) => m.name),
+        room.code,
+        room.groupId,
+      )
       navigate(`/room/${cleanCode}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not join room')
@@ -79,7 +88,9 @@ export function Join() {
             pattern="[0-9]*"
             maxLength={4}
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            onChange={(e) =>
+              setCode(e.target.value.replace(/\D/g, '').slice(0, 4))
+            }
             placeholder="4821"
             className="w-full rounded-xl border border-border bg-white px-3 py-3 text-center font-mono text-2xl tracking-[0.4em] outline-none ring-primary focus:ring-2"
             required
@@ -101,13 +112,15 @@ export function Join() {
         </label>
 
         {error ? (
-          <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+          <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
         ) : null}
 
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-xl bg-primary py-3.5 text-sm font-semibold text-white shadow-lg transition hover:bg-primary-dark disabled:opacity-50"
+          className="w-full rounded-xl bg-primary py-3.5 text-sm font-semibold text-white transition hover:bg-primary-dark disabled:opacity-50"
         >
           {busy ? 'Joining…' : 'Join Room'}
         </button>

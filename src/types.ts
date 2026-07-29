@@ -70,12 +70,16 @@ export interface EventSuggestion {
   place?: Place
 }
 
-/** Kahoot-style room phases: wait → timed vote → results. */
-export type RoomPhase = 'lobby' | 'voting' | 'results'
+/** Kahoot-style room phases: wait → timed vote → (tie) → (picking) → results. */
+export type RoomPhase = 'lobby' | 'voting' | 'tie' | 'picking' | 'results'
+
+/** How the final winner was decided. */
+export type WinnerResolution = 'votes' | 'random'
 
 /**
  * Shared event room — friends join via 4-digit code or `/join/:code` link,
  * add roams in the lobby, then the host starts a timed voting round.
+ * Ties trigger one re-vote among tied options; a second tie uses RNG.
  */
 export interface EventRoom {
   code: string
@@ -90,8 +94,16 @@ export interface EventRoom {
   phase: RoomPhase
   /** How long voting lasts once the host starts (seconds). */
   voteDurationSeconds: number
-  /** Epoch ms when voting ends; null while still in lobby. */
+  /** Epoch ms when voting ends; null while still in lobby / tie pause. */
   votingEndsAt: number | null
+  /** 1 = first vote, 2 = tiebreaker re-vote. */
+  voteRound: number
+  /** Places still in contention; null = all suggestions. */
+  eligiblePlaceIds: string[] | null
+  /** How the winner was chosen; null until results. */
+  resolvedBy: WinnerResolution | null
+  /** Epoch ms when the system-pick countdown ends; set during `picking`. */
+  pickingEndsAt: number | null
   createdAt: number
   /** Server-side write counter for concurrent updates. */
   version?: number

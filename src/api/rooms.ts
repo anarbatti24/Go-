@@ -130,3 +130,31 @@ export async function revealRoomWinner(
   })
   return data.room
 }
+
+export async function startRevote(
+  code: string,
+  memberId: string,
+  voteDurationSeconds?: number,
+): Promise<RoomView> {
+  const data = await request(`/api/rooms/${code}/revote`, {
+    method: 'POST',
+    body: JSON.stringify({ memberId, voteDurationSeconds }),
+  })
+  return data.room
+}
+
+/** Any member can kick off the next hangout; they become host for that round. */
+export async function startNewEvent(
+  code: string,
+  memberId: string,
+  options?: { clearSuggestions?: boolean },
+): Promise<RoomView> {
+  const data = await request(`/api/rooms/${code}/newevent`, {
+    method: 'POST',
+    body: JSON.stringify({
+      memberId,
+      clearSuggestions: options?.clearSuggestions ?? true,
+    }),
+  })
+  return data.room
+}

@@ -2,11 +2,11 @@
  * Event room (`/room/:code`) — Kahoot-style hangout decisions
  *
  * Vision:
- *   1) Lobby — share code, wait for friends, add roams, host sets the timer
- *   2) Voting — host starts; everyone has a countdown (default 30s) to pick
- *   3) Results — timer ends (or host ends early) and the winner is revealed
- *
- * The page polls the rooms API so joiners / phase changes stay live.
+ *   1) Lobby — share code, wait for friends, add roams, event host sets timer
+ *   2) Voting — event host starts; everyone has a countdown to pick
+ *   3) Tie — first-round tie pauses; re-vote among tied places
+ *   4) Results — winner revealed; any member can plan the next hangout
+ *      (they become host for that round — host is fluid per event)
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -16,6 +16,7 @@ import {
   Check,
   Clock,
   Copy,
+  Dices,
   Link2,
   MapPin,
   Plus,
@@ -28,6 +29,8 @@ import {
   castRoomVote,
   fetchRoom,
   revealRoomWinner,
+  startNewEvent,
+  startRevote,
   startVoting,
   updateRoomSettings,
   type RoomView,
@@ -85,9 +88,9 @@ export function Room() {
     return () => window.clearInterval(id)
   }, [refresh])
 
-  // Smooth local countdown tick while voting is open
+  // Smooth local countdown tick while voting or system-picking
   useEffect(() => {
-    if (room?.phase !== 'voting') return
+    if (room?.phase !== 'voting' && room?.phase !== 'picking') return
     const id = window.setInterval(() => setNow(Date.now()), 200)
     return () => window.clearInterval(id)
   }, [room?.phase])
@@ -105,6 +108,19 @@ export function Room() {
     return Math.max(0, Math.ceil((room.votingEndsAt - serverAlignedNow) / 1000))
   }, [room, now, skewMs])
 
+  const pickingSecondsLeft = useMemo(() => {
+    if (!room?.pickingEndsAt || room.phase !== 'picking') return 0
+    const serverAlignedNow = now - skewMs
+    return Math.max(0, Math.ceil((room.pickingEndsAt - serverAlignedNow) / 1000))
+  }, [room, now, skewMs])
+
+  const eligibleSet = useMemo(() => {
+    if (!room?.eligiblePlaceIds || room.eligiblePlaceIds.length === 0) {
+      return null
+    }
+    return new Set(room.eligiblePlaceIds)
+  }, [room])
+
   const suggestionCards = useMemo(() => {
     if (!room) return []
     return room.suggestions
@@ -114,9 +130,23 @@ export function Room() {
           places.find((p) => p.id === suggestion.placeId) ??
           null
         if (!place) return null
+        // Drop eliminated options so runoff / picking stay short to scroll.
+        if (eligibleSet && !eligibleSet.has(place.id)) return null
         return { suggestion, place }
       })
       .filter((row): row is NonNullable<typeof row> => Boolean(row))
+  }, [room, places, eligibleSet])
+
+  const tiedNames = useMemo(() => {
+    if (!room?.eligiblePlaceIds?.length) return []
+    return room.eligiblePlaceIds.map((id) => {
+      const fromSuggestion = room.suggestions.find((s) => s.placeId === id)
+      return (
+        fromSuggestion?.place?.name ??
+        places.find((p) => p.id === id)?.name ??
+        'a place'
+      )
+    })
   }, [room, places])
 
   const availableToAdd = useMemo(() => {
@@ -151,6 +181,7 @@ export function Room() {
 
   const handleVote = async (placeId: string) => {
     if (!room || !memberId || room.phase !== 'voting' || busy) return
+    if (eligibleSet && !eligibleSet.has(placeId)) return
     setBusy(true)
     try {
       const nextPlace = myVote === placeId ? null : placeId
@@ -211,6 +242,22 @@ export function Room() {
     }
   }
 
+  const handleRevote = async () => {
+    if (!memberId || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const next = await startRevote(code, memberId)
+      setRoom(next)
+      setSkewMs(Date.now() - next.serverNow)
+      setNow(Date.now())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start re-vote')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const handleEndEarly = async () => {
     if (!memberId || busy) return
     setBusy(true)
@@ -219,6 +266,24 @@ export function Room() {
       setRoom(next)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not end voting')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleNewEvent = async () => {
+    if (!memberId || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const next = await startNewEvent(code, memberId)
+      setRoom(next)
+      setSkewMs(Date.now() - next.serverNow)
+      setNow(Date.now())
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not start a new event',
+      )
     } finally {
       setBusy(false)
     }
@@ -260,8 +325,10 @@ export function Room() {
     ? room.suggestions.find((s) => s.placeId === room.winnerId)?.place ??
       places.find((p) => p.id === room.winnerId)
     : null
-  const showTallies = room.phase === 'results'
+  const showTallies =
+    room.phase === 'results' || room.phase === 'tie' || room.phase === 'picking'
   const canVote = room.phase === 'voting'
+  const isTiebreaker = canVote && room.voteRound >= 2
   const timerUrgent = canVote && secondsLeft <= 5
 
   return (
@@ -280,7 +347,12 @@ export function Room() {
             (me?.isHost
               ? 'Waiting room — start when everyone is ready.'
               : `Waiting for ${room.members.find((m) => m.isHost)?.name ?? 'the host'} to start…`)}
-          {room.phase === 'voting' && 'Voting is live — pick a place!'}
+          {room.phase === 'voting' &&
+            (isTiebreaker
+              ? 'Tiebreaker — pick among the tied places!'
+              : 'Voting is live — pick a place!')}
+          {room.phase === 'tie' && 'It’s a tie — time for a re-vote.'}
+          {room.phase === 'picking' && 'Tied again — the system is choosing…'}
           {room.phase === 'results' && 'Voting is over.'}
         </p>
       </header>
@@ -292,16 +364,22 @@ export function Room() {
             'mb-5 overflow-hidden rounded-2xl p-4 text-center shadow-sm ring-1 transition',
             timerUrgent
               ? 'bg-red-50 ring-red-200'
-              : 'bg-surface ring-black/5',
+              : isTiebreaker
+                ? 'bg-amber-50 ring-amber-200'
+                : 'bg-surface ring-black/5',
           ].join(' ')}
         >
           <p
             className={[
               'text-xs font-semibold uppercase tracking-wider',
-              timerUrgent ? 'text-red-600' : 'text-primary',
+              timerUrgent
+                ? 'text-red-600'
+                : isTiebreaker
+                  ? 'text-amber-800'
+                  : 'text-primary',
             ].join(' ')}
           >
-            Time left
+            {isTiebreaker ? 'Tiebreaker' : 'Time left'}
           </p>
           <p
             className={[
@@ -315,7 +393,11 @@ export function Room() {
             <div
               className={[
                 'h-full rounded-full transition-[width] duration-200',
-                timerUrgent ? 'bg-red-500' : 'bg-primary',
+                timerUrgent
+                  ? 'bg-red-500'
+                  : isTiebreaker
+                    ? 'bg-amber-500'
+                    : 'bg-primary',
               ].join(' ')}
               style={{
                 width: `${Math.min(
@@ -328,6 +410,46 @@ export function Room() {
           <p className="mt-2 text-sm text-muted">
             {votedCount}/{room.members.length} voted
             {myVote ? ' · You’re in!' : ' · Tap a place below'}
+            {isTiebreaker
+              ? ' · Still tied after this? We’ll roll for it.'
+              : ''}
+          </p>
+        </section>
+      ) : null}
+
+      {/* Tie pause */}
+      {room.phase === 'tie' ? (
+        <section className="mb-5 rounded-2xl bg-amber-50 p-4 text-center shadow-sm ring-1 ring-amber-200">
+          <p className="text-xs font-semibold uppercase tracking-wider text-amber-800">
+            Tie
+          </p>
+          <h2 className="mt-1 text-xl font-bold text-gray-900">Dead even!</h2>
+          <p className="mt-2 text-sm text-amber-950/80">
+            {tiedNames.length > 0
+              ? `${tiedNames.join(' · ')} are tied. Vote again among just these.`
+              : 'Top places are tied. Vote again among just those options.'}{' '}
+            If it’s still a tie, we’ll pick at random.
+          </p>
+        </section>
+      ) : null}
+
+      {/* Second-tie system pick countdown */}
+      {room.phase === 'picking' ? (
+        <section className="mb-5 overflow-hidden rounded-2xl bg-violet-600 p-5 text-center text-white shadow-lg ring-1 ring-violet-700">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/15">
+            <Dices className="h-6 w-6 animate-pulse" />
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-100">
+            Tied again!
+          </p>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight">
+            System choosing in
+          </h2>
+          <p className="mt-3 font-mono text-6xl font-bold tabular-nums leading-none">
+            {pickingSecondsLeft}
+          </p>
+          <p className="mt-3 text-sm text-violet-100">
+            Rolling among {Math.max(suggestionCards.length, 2)} tied options…
           </p>
         </section>
       ) : null}
@@ -465,11 +587,24 @@ export function Room() {
       <section className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-gray-900">
-            {room.phase === 'results' ? 'Results' : 'Suggestions'}
+            {room.phase === 'results'
+              ? 'Results'
+              : room.phase === 'tie'
+                ? 'Tied places'
+                : room.phase === 'picking'
+                  ? 'Still tied'
+                  : isTiebreaker
+                    ? 'Tiebreaker picks'
+                    : 'Suggestions'}
           </h2>
           <p className="text-sm text-muted">
             {room.phase === 'lobby' && 'Add places before the host starts.'}
-            {room.phase === 'voting' && 'Tap one place to cast your vote.'}
+            {room.phase === 'voting' &&
+              (isTiebreaker
+                ? 'Only the tied places are left — tap one.'
+                : 'Tap one place to cast your vote.')}
+            {room.phase === 'tie' && 'These places are still in the race.'}
+            {room.phase === 'picking' && 'Hang tight — fate is rolling.'}
             {room.phase === 'results' && 'Here’s how everyone voted.'}
           </p>
         </div>
@@ -515,9 +650,11 @@ export function Room() {
                   'overflow-hidden rounded-2xl bg-surface text-left shadow-sm ring-2 transition',
                   isWinner
                     ? 'ring-green-500'
-                    : isSelected
-                      ? 'ring-primary'
-                      : 'ring-transparent',
+                    : room.phase === 'tie' || room.phase === 'picking'
+                      ? 'ring-amber-400'
+                      : isSelected
+                        ? 'ring-primary'
+                        : 'ring-transparent',
                   canVote ? 'hover:shadow-md' : '',
                   room.phase === 'results' && !isWinner ? 'opacity-70' : '',
                   !canVote && room.phase !== 'results' ? 'cursor-default' : '',
@@ -531,8 +668,23 @@ export function Room() {
                   />
                   {isWinner ? (
                     <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-green-500 px-2.5 py-1 text-xs font-semibold text-white">
-                      <Trophy className="h-3.5 w-3.5" />
-                      Winner
+                      {room.resolvedBy === 'random' ? (
+                        <Dices className="h-3.5 w-3.5" />
+                      ) : (
+                        <Trophy className="h-3.5 w-3.5" />
+                      )}
+                      {room.resolvedBy === 'random' ? 'Lucky pick' : 'Winner'}
+                    </span>
+                  ) : null}
+                  {room.phase === 'tie' ? (
+                    <span className="absolute left-2 top-2 rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white">
+                      Tied
+                    </span>
+                  ) : null}
+                  {room.phase === 'picking' ? (
+                    <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white">
+                      <Dices className="h-3.5 w-3.5" />
+                      In the roll
                     </span>
                   ) : null}
                 </div>
@@ -578,6 +730,23 @@ export function Room() {
         </button>
       ) : null}
 
+      {me?.isHost && room.phase === 'tie' ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void handleRevote()}
+          className="mt-6 w-full rounded-xl bg-amber-500 py-3.5 text-sm font-semibold text-white shadow-lg transition hover:bg-amber-600 disabled:opacity-50"
+        >
+          Start re-vote ({room.voteDurationSeconds}s)
+        </button>
+      ) : null}
+
+      {!me?.isHost && room.phase === 'tie' ? (
+        <p className="mt-6 rounded-xl bg-amber-50 px-4 py-3 text-center text-sm text-amber-900 ring-1 ring-amber-100">
+          Waiting for the host to start the re-vote…
+        </p>
+      ) : null}
+
       {me?.isHost && room.phase === 'voting' ? (
         <button
           type="button"
@@ -592,9 +761,16 @@ export function Room() {
       {winner ? (
         <div className="mt-6 rounded-2xl border-2 border-green-500 bg-green-50 p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-green-700">
-            Tonight&apos;s pick
+            {room.resolvedBy === 'random'
+              ? 'Decided by chance'
+              : "Tonight's pick"}
           </p>
           <h2 className="mt-1 text-xl font-bold text-gray-900">{winner.name}</h2>
+          {room.resolvedBy === 'random' ? (
+            <p className="mt-1 text-sm text-green-800/80">
+              Still tied after the re-vote — we rolled among the tied options.
+            </p>
+          ) : null}
           <p className="mt-2 text-sm leading-relaxed text-gray-700">
             {winner.description}
           </p>
@@ -606,6 +782,23 @@ export function Room() {
               {winner.location}
             </span>
           </div>
+        </div>
+      ) : null}
+
+      {room.phase === 'results' || room.phase === 'tie' ? (
+        <div className="mt-6 space-y-3">
+          <button
+            type="button"
+            disabled={busy || !memberId}
+            onClick={() => void handleNewEvent()}
+            className="w-full rounded-xl bg-primary py-3.5 text-sm font-semibold text-white shadow-lg transition hover:bg-primary-dark disabled:opacity-50"
+          >
+            Plan another hangout
+          </button>
+          <p className="text-center text-xs text-muted">
+            Same group & code — you’ll become host for the next round and
+            everyone can add fresh places.
+          </p>
         </div>
       ) : null}
 

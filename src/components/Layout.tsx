@@ -13,6 +13,7 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { PHONE_SHELL_ID } from './Modal'
+import { useStore } from '../store/useStore'
 
 /** Paths that should hide the tab bar (immersive / stack screens). */
 const hideNavPrefixes = ['/event/', '/join', '/room/']
@@ -23,10 +24,14 @@ const hideNavPrefixes = ['/event/', '/join', '/room/']
  */
 export function Layout() {
   const { pathname } = useLocation()
+  const userPrefs = useStore((s) => s.userPrefs)
   const isFeed = pathname === '/'
-  const showNav = !hideNavPrefixes.some(
-    (prefix) => pathname === prefix || pathname.startsWith(prefix),
-  )
+  const onboardingOpen = isFeed && !userPrefs
+  const showNav =
+    !onboardingOpen &&
+    !hideNavPrefixes.some(
+      (prefix) => pathname === prefix || pathname.startsWith(prefix),
+    )
 
   return (
     <div className="flex min-h-full justify-center bg-neutral-950">
@@ -45,8 +50,8 @@ export function Layout() {
         <main
           className={[
             'flex min-h-0 flex-1 flex-col',
-            // Feed owns its own full-bleed scrolling; other pages get padding
-            isFeed
+            // Feed / onboarding own full-bleed scrolling; other pages get padding
+            isFeed || onboardingOpen
               ? 'overflow-hidden p-0'
               : showNav
                 ? 'overflow-y-auto px-4 pb-24 pt-6'

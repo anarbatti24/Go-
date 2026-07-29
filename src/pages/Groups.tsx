@@ -59,7 +59,7 @@ export function Groups() {
 
       setDisplayName(you)
       setRoomMemberId(room.code, memberId)
-      addGroup(groupName, memberList, room.code)
+      addGroup(groupName, memberList, room.code, room.groupId)
 
       setName('')
       setMembers('')
@@ -83,23 +83,38 @@ export function Groups() {
         <p className="mt-1 text-sm text-muted">
           Create a group to get a shareable 4-digit code.
         </p>
-        <Link
-          to="/join"
-          className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-primary shadow-sm ring-1 ring-black/5 transition hover:shadow-md"
-        >
-          <Hash className="h-4 w-4" />
-          Join with code
-        </Link>
+        <div className="mt-3 flex items-center gap-2">
+          <Link
+            to="/join"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-primary shadow-sm ring-1 ring-black/5 transition hover:shadow-md"
+          >
+            <Hash className="h-4 w-4" />
+            Join with code
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null)
+              setOpen(true)
+            }}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-sm transition hover:bg-primary-dark"
+            aria-label="Create group"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        </div>
       </header>
 
       {groups.length === 0 ? (
         <div className="rounded-2xl bg-surface px-6 py-14 text-center shadow-sm ring-1 ring-black/5">
           <Users className="mx-auto h-8 w-8 text-primary" />
           <p className="mt-3 font-medium text-gray-800">No groups yet</p>
-          <p className="mt-1 text-sm text-muted">Tap + to create your first group.</p>
+          <p className="mt-1 text-sm text-muted">
+            Tap + to create your first group.
+          </p>
         </div>
       ) : (
-        <ul className="space-y-3 pb-20">
+        <ul className="space-y-3 pb-4">
           {groups.map((group) => (
             <li key={group.id}>
               <Link
@@ -122,18 +137,6 @@ export function Groups() {
           ))}
         </ul>
       )}
-
-      <button
-        type="button"
-        onClick={() => {
-          setError(null)
-          setOpen(true)
-        }}
-        className="sticky bottom-24 z-30 ml-auto mt-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg transition hover:bg-primary-dark"
-        aria-label="Create group"
-      >
-        <Plus className="h-7 w-7" />
-      </button>
 
       {open ? (
         <Modal title="New Group" onClose={() => !busy && setOpen(false)}>

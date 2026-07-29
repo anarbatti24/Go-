@@ -13,10 +13,17 @@ import { priceLabel, ratingLabel, runtimeLabel } from '../utils/price'
 interface ReelCardProps {
   place: Place
   saved: boolean
+  /** Highlight when this card was boosted by onboarding interests. */
+  forYou?: boolean
   onToggleSave: () => void
 }
 
-export function ReelCard({ place, saved, onToggleSave }: ReelCardProps) {
+export function ReelCard({
+  place,
+  saved,
+  forYou = false,
+  onToggleSave,
+}: ReelCardProps) {
   const isMovie = place.source === 'tmdb'
   const rating = ratingLabel(place.rating, place.source)
   const runtime = runtimeLabel(place.runtimeMinutes)
@@ -32,6 +39,12 @@ export function ReelCard({ place, saved, onToggleSave }: ReelCardProps) {
         draggable={false}
       />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30" />
+
+      {forYou ? (
+        <span className="absolute left-3 top-14 z-20 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-md">
+          For you
+        </span>
+      ) : null}
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 space-y-2 p-5 pb-24 text-white">
         <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-white/70">

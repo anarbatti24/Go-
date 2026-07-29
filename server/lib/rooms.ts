@@ -7,6 +7,7 @@
 
 import { getRoomStore } from './roomStore.js'
 import type { ApiResult, EventMember, EventRoom, EventSuggestion, Place } from './types.js'
+import { PICKING_DURATION_MS } from './types.js'
 
 export const MAX_SUGGESTIONS = 8
 export const MIN_VOTE_SECONDS = 10
@@ -43,45 +44,159 @@ function clampDuration(seconds: number): number {
   )
 }
 
+/** Backfill fields added for tiebreakers (rooms already in Redis). */
+function ensureTieFields(room: EventRoom): void {
+  if (typeof room.voteRound !== 'number' || room.voteRound < 1) {
+    room.voteRound = 1
+  }
+  if (room.eligiblePlaceIds === undefined) {
+    room.eligiblePlaceIds = null
+  }
+  if (room.resolvedBy === undefined) {
+    room.resolvedBy = null
+  }
+  if (room.pickingEndsAt === undefined) {
+    room.pickingEndsAt = null
+  }
+}
+
+function eligibleIds(room: EventRoom): string[] {
+  if (room.eligiblePlaceIds && room.eligiblePlaceIds.length > 0) {
+    const allowed = new Set(room.eligiblePlaceIds)
+    return room.suggestions
+      .map((s) => s.placeId)
+      .filter((id) => allowed.has(id))
+  }
+  return room.suggestions.map((s) => s.placeId)
+}
+
 function tallyVotes(room: EventRoom): Record<string, number> {
   const tallies: Record<string, number> = {}
   for (const suggestion of room.suggestions) {
     tallies[suggestion.placeId] = 0
   }
+  const allowed = new Set(eligibleIds(room))
   for (const placeId of Object.values(room.votes)) {
-    if (placeId in tallies) tallies[placeId] += 1
+    if (placeId in tallies && allowed.has(placeId)) tallies[placeId] += 1
   }
   return tallies
 }
 
-function pickWinner(room: EventRoom): string {
-  const tallies = tallyVotes(room)
-  let winnerId = room.suggestions[0]!.placeId
-  let maxVotes = tallies[winnerId] ?? 0
-  for (const suggestion of room.suggestions) {
-    const count = tallies[suggestion.placeId] ?? 0
-    if (count > maxVotes) {
-      maxVotes = count
-      winnerId = suggestion.placeId
-    }
+function leadersFromTallies(
+  room: EventRoom,
+  tallies: Record<string, number>,
+): string[] {
+  const ids = eligibleIds(room)
+  if (ids.length === 0) return []
+  let maxVotes = -1
+  for (const id of ids) {
+    const count = tallies[id] ?? 0
+    if (count > maxVotes) maxVotes = count
   }
-  return winnerId
+  return ids.filter((id) => (tallies[id] ?? 0) === maxVotes)
+}
+
+function pickRandom(ids: string[]): string {
+  const index = Math.floor(Math.random() * ids.length)
+  return ids[index]!
+}
+
+function finishWithWinner(
+  room: EventRoom,
+  winnerId: string,
+  resolvedBy: 'votes' | 'random',
+): void {
+  room.phase = 'results'
+  room.winnerId = winnerId
+  room.resolvedBy = resolvedBy
+  room.votingEndsAt = Date.now()
+  room.pickingEndsAt = null
+}
+
+/** After the dramatic countdown, roll among the tied places. */
+function resolvePicking(room: EventRoom): void {
+  ensureTieFields(room)
+  const pool = eligibleIds(room)
+  if (pool.length === 0) {
+    room.phase = 'results'
+    room.winnerId = null
+    room.resolvedBy = null
+    room.pickingEndsAt = null
+    return
+  }
+  finishWithWinner(room, pickRandom(pool), 'random')
+}
+
+/**
+ * Close an open vote: sole leader → results; first-round tie → pause;
+ * second-round (or later) tie → dramatic system-pick countdown.
+ */
+function resolveVoting(room: EventRoom): void {
+  ensureTieFields(room)
+  if (room.suggestions.length === 0) {
+    room.phase = 'results'
+    room.winnerId = null
+    room.resolvedBy = null
+    room.votingEndsAt = Date.now()
+    room.pickingEndsAt = null
+    return
+  }
+
+  const tallies = tallyVotes(room)
+  const leaders = leadersFromTallies(room, tallies)
+
+  if (leaders.length <= 1) {
+    finishWithWinner(
+      room,
+      leaders[0] ?? room.suggestions[0]!.placeId,
+      'votes',
+    )
+    return
+  }
+
+  // First-round tie — pause for a host-started re-vote among leaders only.
+  if (room.voteRound < 2) {
+    room.phase = 'tie'
+    room.winnerId = null
+    room.resolvedBy = null
+    room.eligiblePlaceIds = leaders
+    room.votingEndsAt = null
+    room.pickingEndsAt = null
+    return
+  }
+
+  // Second-round tie — countdown, then RNG.
+  room.phase = 'picking'
+  room.winnerId = null
+  room.resolvedBy = null
+  room.eligiblePlaceIds = leaders
+  room.votingEndsAt = Date.now()
+  room.pickingEndsAt = Date.now() + PICKING_DURATION_MS
 }
 
 function finalizeIfExpired(room: EventRoom): boolean {
+  ensureTieFields(room)
   if (
     room.phase === 'voting' &&
     room.votingEndsAt != null &&
     Date.now() >= room.votingEndsAt
   ) {
-    room.phase = 'results'
-    room.winnerId = room.suggestions.length > 0 ? pickWinner(room) : null
+    resolveVoting(room)
+    return true
+  }
+  if (
+    room.phase === 'picking' &&
+    room.pickingEndsAt != null &&
+    Date.now() >= room.pickingEndsAt
+  ) {
+    resolvePicking(room)
     return true
   }
   return false
 }
 
 function roomPayload(room: EventRoom) {
+  ensureTieFields(room)
   finalizeIfExpired(room)
   return {
     ...room,
@@ -109,13 +224,26 @@ async function loadRoom(code: string): Promise<EventRoom | null> {
   const store = getRoomStore()
   const room = await store.get(code)
   if (!room) return null
+  ensureTieFields(room)
   if (finalizeIfExpired(room)) {
     try {
       return (
         (await store.update(code, (draft) => {
-          draft.phase = 'results'
-          draft.winnerId =
-            draft.suggestions.length > 0 ? pickWinner(draft) : null
+          ensureTieFields(draft)
+          const now = Date.now()
+          if (
+            draft.phase === 'voting' &&
+            draft.votingEndsAt != null &&
+            now >= draft.votingEndsAt
+          ) {
+            resolveVoting(draft)
+          } else if (
+            draft.phase === 'picking' &&
+            draft.pickingEndsAt != null &&
+            now >= draft.pickingEndsAt
+          ) {
+            resolvePicking(draft)
+          }
         })) ?? room
       )
     } catch {
@@ -194,6 +322,10 @@ export async function handleRoomsRequest(
             : DEFAULT_VOTE_SECONDS,
         ),
         votingEndsAt: null,
+        voteRound: 1,
+        eligiblePlaceIds: null,
+        resolvedBy: null,
+        pickingEndsAt: null,
         createdAt: Date.now(),
         version: 0,
       }
@@ -230,10 +362,10 @@ export async function handleRoomsRequest(
           memberId = existing.id
           return
         }
-        if (draft.phase !== 'lobby') {
+        if (draft.phase !== 'lobby' && draft.phase !== 'results') {
           throw new HttpError(
             400,
-            'Voting already started — ask the host for a new room',
+            'Voting is in progress — wait for this round to finish',
           )
         }
         const member: EventMember = {
@@ -295,6 +427,43 @@ export async function handleRoomsRequest(
         draft.phase = 'voting'
         draft.votes = {}
         draft.winnerId = null
+        draft.resolvedBy = null
+        draft.voteRound = 1
+        draft.eligiblePlaceIds = null
+        draft.pickingEndsAt = null
+        draft.votingEndsAt = Date.now() + draft.voteDurationSeconds * 1000
+      })
+      return { status: 200, body: { room: roomPayload(room) } }
+    }
+
+    const revoteMatch = path.match(/^\/api\/rooms\/(\d{4})\/revote$/)
+    if (revoteMatch && verb === 'POST') {
+      const room = await mutateRoom(revoteMatch[1]!, (draft) => {
+        ensureTieFields(draft)
+        if (draft.phase !== 'tie') {
+          throw new HttpError(400, 'No tie to break — start a new vote first')
+        }
+        if (
+          !requireHost(
+            draft,
+            typeof data.memberId === 'string' ? data.memberId : undefined,
+          )
+        ) {
+          throw new HttpError(403, 'Only the host can start the re-vote')
+        }
+        const tied = draft.eligiblePlaceIds
+        if (!tied || tied.length < 2) {
+          throw new HttpError(400, 'Need at least 2 tied places to re-vote')
+        }
+        if (typeof data.voteDurationSeconds === 'number') {
+          draft.voteDurationSeconds = clampDuration(data.voteDurationSeconds)
+        }
+        draft.phase = 'voting'
+        draft.votes = {}
+        draft.winnerId = null
+        draft.resolvedBy = null
+        draft.voteRound = 2
+        draft.pickingEndsAt = null
         draft.votingEndsAt = Date.now() + draft.voteDurationSeconds * 1000
       })
       return { status: 200, body: { room: roomPayload(room) } }
@@ -374,6 +543,12 @@ export async function handleRoomsRequest(
           throw new HttpError(400, 'Place is not in this room')
         }
 
+        ensureTieFields(draft)
+        const allowed = new Set(eligibleIds(draft))
+        if (!allowed.has(placeId)) {
+          throw new HttpError(400, 'That place is out of this round')
+        }
+
         draft.votes[member.id] = placeId
       })
       return { status: 200, body: { room: roomPayload(room) } }
@@ -382,6 +557,7 @@ export async function handleRoomsRequest(
     const revealMatch = path.match(/^\/api\/rooms\/(\d{4})\/reveal$/)
     if (revealMatch && verb === 'POST') {
       const room = await mutateRoom(revealMatch[1]!, (draft) => {
+        ensureTieFields(draft)
         if (draft.suggestions.length === 0) {
           throw new HttpError(400, 'Add at least one place first')
         }
@@ -393,12 +569,52 @@ export async function handleRoomsRequest(
         ) {
           throw new HttpError(403, 'Only the host can end voting early')
         }
-        if (draft.phase === 'lobby') {
-          throw new HttpError(400, 'Start voting first')
+        if (draft.phase !== 'voting') {
+          throw new HttpError(400, 'Voting is not open')
         }
-        draft.phase = 'results'
-        draft.votingEndsAt = Date.now()
-        draft.winnerId = pickWinner(draft)
+        resolveVoting(draft)
+      })
+      return { status: 200, body: { room: roomPayload(room) } }
+    }
+
+    const resetMatch = path.match(/^\/api\/rooms\/(\d{4})\/(reset|newevent)$/)
+    if (resetMatch && verb === 'POST') {
+      const room = await mutateRoom(resetMatch[1]!, (draft) => {
+        ensureTieFields(draft)
+        if (draft.phase !== 'results' && draft.phase !== 'tie') {
+          throw new HttpError(
+            400,
+            'Finish the current vote before starting a new event',
+          )
+        }
+        const member = draft.members.find(
+          (m) =>
+            m.id === (typeof data.memberId === 'string' ? data.memberId : ''),
+        )
+        if (!member) {
+          throw new HttpError(403, 'Join the room first')
+        }
+
+        // Fluid host: whoever starts the next hangout runs this round.
+        draft.hostId = member.id
+        for (const m of draft.members) {
+          m.isHost = m.id === member.id
+        }
+
+        // Fresh event by default; pass clearSuggestions:false to keep places.
+        const clearSuggestions = data.clearSuggestions !== false
+
+        draft.phase = 'lobby'
+        draft.votes = {}
+        draft.winnerId = null
+        draft.resolvedBy = null
+        draft.voteRound = 1
+        draft.eligiblePlaceIds = null
+        draft.votingEndsAt = null
+        draft.pickingEndsAt = null
+        if (clearSuggestions) {
+          draft.suggestions = []
+        }
       })
       return { status: 200, body: { room: roomPayload(room) } }
     }

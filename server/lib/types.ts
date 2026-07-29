@@ -2,7 +2,13 @@
  * Shared server types for rooms + discovery (Vite plugins + Vercel functions).
  */
 
-export type RoomPhase = 'lobby' | 'voting' | 'results'
+export type RoomPhase = 'lobby' | 'voting' | 'tie' | 'picking' | 'results'
+
+/** How the final winner was decided. */
+export type WinnerResolution = 'votes' | 'random'
+
+/** Dramatic pause before RNG resolves a second-round tie. */
+export const PICKING_DURATION_MS = 3000
 
 export interface EventMember {
   id: string
@@ -30,6 +36,20 @@ export interface EventRoom {
   phase: RoomPhase
   voteDurationSeconds: number
   votingEndsAt: number | null
+  /**
+   * Voting round: 1 = first vote, 2 = tiebreaker re-vote.
+   * After round 2 a remaining tie is broken by RNG.
+   */
+  voteRound: number
+  /**
+   * Place IDs still in contention. Null means every suggestion is eligible.
+   * Set to the tied options when entering a runoff.
+   */
+  eligiblePlaceIds: string[] | null
+  /** How the winner was chosen; null until results. */
+  resolvedBy: WinnerResolution | null
+  /** Epoch ms when the system-pick countdown ends; set during `picking`. */
+  pickingEndsAt: number | null
   createdAt: number
   /** Incremented on every write — used for compare-and-swap. */
   version?: number

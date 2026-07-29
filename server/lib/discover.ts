@@ -160,6 +160,7 @@ async function fetchYelp(
   apiKey: string,
   location: string,
   limit: number,
+  radiusMeters: number | null,
 ): Promise<Place[]> {
   const params = new URLSearchParams({
     location,
@@ -167,8 +168,10 @@ async function fetchYelp(
     categories: 'restaurants,nightlife,active,arts',
     limit: String(Math.min(50, limit)),
     sort_by: 'best_match',
-    radius: '16000',
   })
+  if (radiusMeters != null) {
+    params.set('radius', String(radiusMeters))
+  }
 
   const res = await fetch(
     `https://api.yelp.com/v3/businesses/search?${params}`,
@@ -276,10 +279,29 @@ async function fetchTmdbWithBearer(
 export async function handleDiscover(
   location: string,
   keys?: { yelpKey?: string; tmdbKey?: string },
+  options?: { radiusMiles?: number },
 ): Promise<ApiResult> {
   const trimmed = location.trim()
   if (!trimmed) {
     return { status: 400, body: { error: 'location query param is required' } }
+  }
+
+  const rawMiles =
+    typeof options?.radiusMiles === 'number' && Number.isFinite(options.radiusMiles)
+      ? options.radiusMiles
+      : 25
+  // User preference can be 0–500; Yelp itself only honors up to ~25 mi.
+  const radiusMiles = Math.min(500, Math.max(0, rawMiles))
+  let radiusMeters: number | null
+  if (radiusMiles <= 0) {
+    radiusMeters = 400
+  } else if (radiusMiles > 25) {
+    radiusMeters = null
+  } else {
+    radiusMeters = Math.min(
+      40000,
+      Math.max(400, Math.round(radiusMiles * 1609.344)),
+    )
   }
 
   const yelpKey =
@@ -299,6 +321,7 @@ export async function handleDiscover(
       body: {
         places: [],
         sources: { yelp: false, tmdb: false, fallback: true },
+        radiusMiles,
         message:
           'Add YELP_API_KEY and TMDB_API_KEY, then redeploy / restart the server.',
       },
@@ -311,7 +334,7 @@ export async function handleDiscover(
 
   if (hasYelp) {
     try {
-      yelpPlaces = await fetchYelp(yelpKey, trimmed, YELP_LIMIT)
+      yelpPlaces = await fetchYelp(yelpKey, trimmed, YELP_LIMIT, radiusMeters)
     } catch (err) {
       errors.push(err instanceof Error ? err.message : 'Yelp failed')
     }
@@ -335,6 +358,7 @@ export async function handleDiscover(
       body: {
         places: [],
         sources: { yelp: hasYelp, tmdb: hasTmdb, fallback: true },
+        radiusMiles,
         errors,
         message: 'Live APIs returned nothing — check your keys / location.',
       },
@@ -350,6 +374,7 @@ export async function handleDiscover(
         tmdb: tmdbPlaces.length > 0,
         fallback: false,
       },
+      radiusMiles,
       errors: errors.length ? errors : undefined,
     },
   }

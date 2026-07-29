@@ -3,21 +3,93 @@
  *
  * Vision: discovery content loads from Yelp + TMDB based on the user's city /
  * zip. Saved roams are cached as full Place objects so they survive catalog
- * refreshes when the location changes.
+ * refreshes when the location changes. First-run prefs personalize the Feed.
  */
 
 import { create } from 'zustand'
 import { samplePlaces } from '../data/places'
+import type {
+  AgeRangeId,
+  InterestId,
+  UserPrefs,
+} from '../data/interests'
+import { clampTravelMiles, DEFAULT_TRAVEL_MILES } from '../data/interests'
 import type { Group, Place } from '../types'
 import { createId } from '../utils/id'
 
 const LOCATION_KEY = 'go-user-location'
+const PREFS_KEY = 'go-user-prefs'
+const GROUPS_KEY = 'go-user-groups'
 
 function readStoredLocation(): string {
   try {
     return localStorage.getItem(LOCATION_KEY) ?? ''
   } catch {
     return ''
+  }
+}
+
+function readStoredPrefs(): UserPrefs | null {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<UserPrefs>
+    if (
+      typeof parsed.ageRange !== 'string' ||
+      !Array.isArray(parsed.interests) ||
+      parsed.interests.length === 0
+    ) {
+      return null
+    }
+    const maxDistanceMiles =
+      typeof parsed.maxDistanceMiles === 'number' &&
+      Number.isFinite(parsed.maxDistanceMiles)
+        ? Math.min(500, Math.max(0, Math.round(parsed.maxDistanceMiles)))
+        : DEFAULT_TRAVEL_MILES
+    return {
+      ageRange: parsed.ageRange as AgeRangeId,
+      interests: parsed.interests.slice(0, 3) as InterestId[],
+      maxDistanceMiles,
+      completedAt:
+        typeof parsed.completedAt === 'number' ? parsed.completedAt : Date.now(),
+    }
+  } catch {
+    return null
+  }
+}
+
+function readStoredGroups(): Group[] {
+  try {
+    const raw = localStorage.getItem(GROUPS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(
+        (g): g is Group =>
+          Boolean(g) &&
+          typeof g === 'object' &&
+          typeof (g as Group).id === 'string' &&
+          typeof (g as Group).name === 'string' &&
+          typeof (g as Group).roomCode === 'string' &&
+          Array.isArray((g as Group).members),
+      )
+      .map((g) => ({
+        id: g.id,
+        name: g.name,
+        roomCode: g.roomCode,
+        members: g.members.filter((m): m is string => typeof m === 'string'),
+      }))
+  } catch {
+    return []
+  }
+}
+
+function persistGroups(groups: Group[]) {
+  try {
+    localStorage.setItem(GROUPS_KEY, JSON.stringify(groups))
+  } catch {
+    // ignore quota / private mode
   }
 }
 
@@ -29,13 +101,25 @@ interface AppState {
   groups: Group[]
   /** City, neighborhood, or ZIP used for discovery. */
   userLocation: string
+  /** First-run age + interests; null until onboarding finishes. */
+  userPrefs: UserPrefs | null
   placesStatus: 'idle' | 'loading' | 'ready' | 'error'
   placesMessage: string | null
 
   toggleSave: (id: string) => void
-  addGroup: (name: string, members: string[], roomCode: string) => Group
+  addGroup: (
+    name: string,
+    members: string[],
+    roomCode: string,
+    groupId?: string,
+  ) => Group
   getSavedPlaces: () => Place[]
   setUserLocation: (location: string) => void
+  setUserPrefs: (prefs: {
+    ageRange: AgeRangeId
+    interests: InterestId[]
+    maxDistanceMiles: number
+  }) => void
   setPlaces: (places: Place[], message?: string | null) => void
   /** Merge remote place snapshots (e.g. friends' room suggestions) into catalog. */
   mergePlaces: (incoming: Place[]) => void
@@ -49,8 +133,9 @@ export const useStore = create<AppState>((set, get) => ({
   places: samplePlaces,
   savedIds: [],
   savedPlaceCache: {},
-  groups: [],
+  groups: typeof window !== 'undefined' ? readStoredGroups() : [],
   userLocation: typeof window !== 'undefined' ? readStoredLocation() : '',
+  userPrefs: typeof window !== 'undefined' ? readStoredPrefs() : null,
   placesStatus: 'idle',
   placesMessage: null,
 
@@ -75,14 +160,38 @@ export const useStore = create<AppState>((set, get) => ({
       }
     }),
 
-  addGroup: (name, members, roomCode) => {
-    const group: Group = {
-      id: createId(),
-      name: name.trim(),
-      members: members.map((m) => m.trim()).filter(Boolean),
-      roomCode,
+  addGroup: (name, members, roomCode, groupId) => {
+    const trimmedCode = roomCode.trim()
+    const nextMembers = members.map((m) => m.trim()).filter(Boolean)
+    const existing = get().groups.find((g) => g.roomCode === trimmedCode)
+
+    if (existing) {
+      const updated: Group = {
+        ...existing,
+        name: name.trim() || existing.name,
+        members: nextMembers.length > 0 ? nextMembers : existing.members,
+      }
+      set((state) => {
+        const groups = state.groups.map((g) =>
+          g.roomCode === trimmedCode ? updated : g,
+        )
+        persistGroups(groups)
+        return { groups }
+      })
+      return updated
     }
-    set((state) => ({ groups: [...state.groups, group] }))
+
+    const group: Group = {
+      id: groupId?.trim() || createId(),
+      name: name.trim(),
+      members: nextMembers,
+      roomCode: trimmedCode,
+    }
+    set((state) => {
+      const groups = [...state.groups, group]
+      persistGroups(groups)
+      return { groups }
+    })
     return group
   },
 
@@ -105,6 +214,21 @@ export const useStore = create<AppState>((set, get) => ({
       // ignore quota / private mode
     }
     set({ userLocation: trimmed })
+  },
+
+  setUserPrefs: ({ ageRange, interests, maxDistanceMiles }) => {
+    const prefs: UserPrefs = {
+      ageRange,
+      interests: interests.slice(0, 3),
+      maxDistanceMiles: clampTravelMiles(maxDistanceMiles),
+      completedAt: Date.now(),
+    }
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
+    } catch {
+      // ignore quota / private mode
+    }
+    set({ userPrefs: prefs })
   },
 
   setPlaces: (places, message = null) =>
