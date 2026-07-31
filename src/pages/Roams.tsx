@@ -1,5 +1,7 @@
 /**
- * My Roams (`/roams`) — personal saved-place library
+ * Go-Tos (`/go-tos`) — personal saved-place library
+ *
+ * Places you’ve hearted from the Feed — your go-to spots for later hangouts.
  */
 
 import { useState } from 'react'
@@ -21,15 +23,19 @@ export function Roams() {
   return (
     <div>
       <header className="mb-5">
-        <h1 className="text-2xl font-bold text-gray-900">My Roams</h1>
-        <p className="mt-1 text-sm text-muted">Places you&apos;ve saved for later.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Go-Tos</h1>
+        <p className="mt-1 text-sm text-muted">
+          Spots you&apos;ve saved — ready whenever your group wants to Go!
+        </p>
       </header>
 
       {savedPlaces.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl bg-surface px-6 py-16 text-center shadow-sm ring-1 ring-black/5">
-          <p className="text-base font-medium text-gray-800">No roams yet. Start exploring!</p>
+          <p className="text-base font-medium text-gray-800">
+            No Go-Tos yet. Start exploring!
+          </p>
           <p className="mt-2 text-sm text-muted">
-            Tap the heart on Feed cards to save places here.
+            Tap the heart on Feed cards to save spots here.
           </p>
         </div>
       ) : (

@@ -1,14 +1,14 @@
 /**
  * Price / rating display helpers
  *
- * Vision: Go! communicates cost as a vibe (money bags) and ratings as stars /
+ * Vision: Go! communicates cost as a vibe (dollar signs) and ratings as stars /
  * scores depending on the source (Yelp vs TMDB).
  */
 
-/** Convert a numeric price level into money bags, or a dash when unknown. */
+/** Convert a numeric price level into $, $$, $$$, or $$$$ — or a dash when unknown. */
 export function priceLabel(price: 1 | 2 | 3 | 4 | null | undefined): string {
   if (!price) return '—'
-  return '💰'.repeat(price)
+  return '$'.repeat(price)
 }
 
 /** Format a rating for the reel footer / detail sheet. */

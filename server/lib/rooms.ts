@@ -575,7 +575,7 @@ export async function handleRoomsRequest(
         }
         const suggestion = draft.suggestions[index]!
         if (suggestion.addedById !== member.id) {
-          throw new HttpError(403, 'You can only remove roams you added')
+          throw new HttpError(403, 'You can only remove spots you added')
         }
         draft.suggestions.splice(index, 1)
       })

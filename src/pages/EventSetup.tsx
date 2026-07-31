@@ -1,9 +1,9 @@
 /**
  * Event Setup (`/event/:groupId`) — shortlist places, then open a live room
  *
- * Vision: the host seeds a few options from My Roams (0–5), then Start Event
+ * Vision: the host seeds a few options from Go-Tos (0–5), then Start Event
  * creates a shareable 4-digit room. Friends join via code/link and can add more
- * roams before everyone votes.
+ * spots before everyone votes.
  */
 
 import { useMemo, useState } from 'react'
@@ -114,7 +114,7 @@ export function EventSetup() {
         <div className="rounded-2xl bg-surface px-6 py-12 text-center shadow-sm ring-1 ring-black/5">
           <p className="font-medium text-gray-800">No saved places yet</p>
           <p className="mt-1 text-sm text-muted">
-            You can still start an empty room — friends add from their roams.
+            You can still start an empty room — friends add from their Go-Tos.
           </p>
           <Link
             to="/"

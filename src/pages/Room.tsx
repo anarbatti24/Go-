@@ -2,7 +2,7 @@
  * Event room (`/room/:code`) — Kahoot-style hangout decisions
  *
  * Vision:
- *   1) Lobby — share code, wait for friends, add/remove your own roams, host sets timer
+ *   1) Lobby — share code, wait for friends, add/remove your own spots, host sets timer
  *   2) Voting — event host starts; everyone has a countdown to pick
  *   3) Tie — full-screen drama, then automatic re-vote among tied places
  *   4) Results — winner revealed; any member can plan the next hangout
@@ -38,6 +38,7 @@ import {
 } from '../api/rooms'
 import { DramaticMoment } from '../components/DramaticMoment'
 import { Modal } from '../components/Modal'
+import { WaysToGetThere } from '../components/WaysToGetThere'
 import { WinnerReveal } from '../components/WinnerReveal'
 import { useStore } from '../store/useStore'
 import { getRoomMemberId } from '../utils/session'
@@ -640,14 +641,14 @@ export function Room() {
         <div className="rounded-2xl bg-surface px-6 py-10 text-center shadow-sm ring-1 ring-black/5">
           <p className="font-medium text-gray-800">No places yet</p>
           <p className="mt-1 text-sm text-muted">
-            Add at least 2 roams so the host can start voting.
+            Add at least 2 spots so the host can start voting.
           </p>
           <button
             type="button"
             onClick={() => setAddOpen(true)}
             className="mt-4 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white"
           >
-            Add from My Roams
+            Add from Go-Tos
           </button>
         </div>
       ) : (
@@ -805,6 +806,7 @@ export function Room() {
               {winner.location}
             </span>
           </div>
+          <WaysToGetThere place={winner} />
         </div>
       ) : null}
 
@@ -826,13 +828,13 @@ export function Room() {
       ) : null}
 
       {addOpen ? (
-        <Modal title="Add from My Roams" onClose={() => setAddOpen(false)}>
+        <Modal title="Add from Go-Tos" onClose={() => setAddOpen(false)}>
           {availableToAdd.length === 0 ? (
             <div className="py-4 text-center">
               <p className="text-sm text-muted">
                 {savedPlaces.length === 0
-                  ? 'Save places from Feed first, then come back.'
-                  : 'All of your saved places are already in this room.'}
+                  ? 'Save spots from Feed first, then come back.'
+                  : 'All of your Go-Tos are already in this room.'}
               </p>
               {savedPlaces.length === 0 ? (
                 <Link

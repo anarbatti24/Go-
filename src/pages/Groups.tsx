@@ -1,8 +1,8 @@
 /**
- * Groups (`/groups`) — create crews and share a join code
+ * Groups (`/groups`) — create a group and share a join code
  *
  * Vision: creating a group immediately spins up a live room with a 4-digit code
- * you can share. Friends join via code/link, add roams, and vote together.
+ * you can share. Friends join via code/link, add Go-Tos, and vote together.
  */
 
 import { useState, type FormEvent } from 'react'
@@ -81,7 +81,7 @@ export function Groups() {
       <header className="mb-5">
         <h1 className="text-2xl font-bold text-gray-900">Groups</h1>
         <p className="mt-1 text-sm text-muted">
-          Create a group to get a shareable 4-digit code.
+          Start a group, share a code, and decide where to Go!
         </p>
         <div className="mt-3 flex items-center gap-2">
           <Link
@@ -149,7 +149,7 @@ export function Groups() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Friday Crew"
+                placeholder="Friday Night"
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none ring-primary focus:ring-2"
                 required
               />

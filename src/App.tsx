@@ -2,7 +2,7 @@
  * App router — the map of Go!'s screens
  *
  * Vision: Go! is a mobile-first social discovery product. Navigation is split into:
- *   1) Bottom-tab destinations: Feed, My Roams, Groups
+ *   1) Bottom-tab destinations: Feed, Go-Tos, Groups
  *   2) Stack destinations (no bottom nav): Event Setup → Room, or Join → Room
  *
  * All routes render inside `Layout`, which provides the phone-sized shell so
@@ -10,11 +10,11 @@
  *
  * Flow to keep in mind when editing routes:
  *   /  → discover (Reels)
- *   /roams → personal library of hearted places
- *   /groups → create crews
+ *   /go-tos → personal library of hearted places
+ *   /groups → create groups
  *   /event/:groupId → seed candidates, create room
  *   /join(/:code) → enter a friend's room
- *   /room/:code → share, add roams, vote together
+ *   /room/:code → share, add spots, vote together
  */
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
@@ -33,8 +33,11 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Feed />} />
-          <Route path="roams" element={<Roams />} />
+          <Route path="go-tos" element={<Roams />} />
           <Route path="groups" element={<Groups />} />
+          {/* Legacy paths */}
+          <Route path="roams" element={<Navigate to="/go-tos" replace />} />
+          <Route path="crews" element={<Navigate to="/groups" replace />} />
           <Route path="event/:groupId" element={<EventSetup />} />
           <Route path="join" element={<Join />} />
           <Route path="join/:code" element={<Join />} />

@@ -99,7 +99,7 @@ export const AGE_RANGES: AgeRangeOption[] = [
   { id: 'under18', label: 'Under 18', hint: 'School / hangouts' },
   { id: '18-24', label: '18–24', hint: 'Campus & nightlife' },
   { id: '25-34', label: '25–34', hint: 'Date nights & weekends' },
-  { id: '35-44', label: '35–44', hint: 'Crews & family' },
+  { id: '35-44', label: '35–44', hint: 'Groups & family' },
   { id: '45-54', label: '45–54', hint: 'Easy evenings out' },
   { id: '55plus', label: '55+', hint: 'Classic favorites' },
 ]

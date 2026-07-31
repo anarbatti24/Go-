@@ -418,3 +418,51 @@ button {
     opacity: 0.85;
   }
 }
+
+/* ── Ways to get there (results accordion) ───────────────────────────────── */
+
+.ways-to-get-there__panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.22s ease;
+}
+
+.ways-to-get-there__panel--open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.ways-to-get-there__inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Reel info panel (hover / expand for full synopsis) ──────────────────── */
+
+.reel-info__panel {
+  background-color: transparent;
+  backdrop-filter: blur(0);
+  transition:
+    background-color 0.25s ease,
+    box-shadow 0.25s ease,
+    backdrop-filter 0.25s ease;
+}
+
+.reel-info--open .reel-info__panel {
+  background-color: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.reel-info__desc--open {
+  display: block;
+  max-height: min(42vh, 18rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}

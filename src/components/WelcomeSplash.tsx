@@ -62,12 +62,11 @@ export function WelcomeSplash({ onDone }: WelcomeSplashProps) {
       <div className="welcome-splash__glow welcome-splash__glow--b" aria-hidden />
       <div className="welcome-splash__ring" aria-hidden />
 
-      <p className="welcome-splash__eyebrow">Ready when you are</p>
       <h1 className="welcome-splash__mark" aria-label="Go!">
         <span className="welcome-splash__go">Go</span>
         <span className="welcome-splash__bang">!</span>
       </h1>
-      <p className="welcome-splash__tag">Find the spot. Decide together.</p>
+      <p className="welcome-splash__tag">Discover, Vote, Go!</p>
     </div>
   )
 }

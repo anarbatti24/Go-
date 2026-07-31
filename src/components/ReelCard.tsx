@@ -3,9 +3,11 @@
  *
  * Vision: Instagram Reels energy for real nearby places (Yelp) and movies (TMDB).
  * Footer metadata adapts: cuisine + distance + price for food, runtime + rating
- * + genre for movies.
+ * + genre for movies. Hovering (or tapping) the info panel darkens the backdrop
+ * and expands the synopsis so nothing is cut off.
  */
 
+import { useState } from 'react'
 import { Clapperboard, Heart, MapPin, Star, Utensils } from 'lucide-react'
 import type { Place } from '../types'
 import { priceLabel, ratingLabel, runtimeLabel } from '../utils/price'
@@ -24,6 +26,7 @@ export function ReelCard({
   forYou = false,
   onToggleSave,
 }: ReelCardProps) {
+  const [infoOpen, setInfoOpen] = useState(false)
   const isMovie = place.source === 'tmdb'
   const rating = ratingLabel(place.rating, place.source)
   const runtime = runtimeLabel(place.runtimeMinutes)
@@ -46,68 +49,104 @@ export function ReelCard({
         </span>
       ) : null}
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 space-y-2 p-5 pb-24 text-white">
-        <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-white/70">
-          {isMovie ? (
-            <Clapperboard className="h-3.5 w-3.5" />
-          ) : (
-            <Utensils className="h-3.5 w-3.5" />
-          )}
-          {categoryLabel}
-        </p>
-        <h2 className="pr-16 text-2xl font-bold leading-tight drop-shadow-sm">
-          {place.name}
-        </h2>
-        <p className="line-clamp-2 pr-16 text-sm leading-relaxed text-white/90">
-          {place.description}
-        </p>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-sm text-white/85">
-          {isMovie ? (
-            <>
-              {rating ? (
-                <span className="inline-flex items-center gap-1">
-                  <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
-                  {rating}
-                </span>
-              ) : null}
-              {runtime ? (
-                <>
-                  <span>·</span>
-                  <span>{runtime}</span>
-                </>
-              ) : null}
-              {place.genres && place.genres.length > 1 ? (
-                <>
-                  <span>·</span>
-                  <span>{place.genres.slice(0, 2).join(', ')}</span>
-                </>
-              ) : null}
-            </>
-          ) : (
-            <>
-              {place.price ? (
-                <span aria-label={`Price level ${place.price}`}>
-                  {priceLabel(place.price)}
-                </span>
-              ) : null}
-              {place.price ? <span>·</span> : null}
-              <span>{place.distance}</span>
-              {rating ? (
-                <>
-                  <span>·</span>
+      <div
+        className={[
+          'reel-info absolute inset-x-0 bottom-0 z-10 p-4 pb-24 text-white',
+          infoOpen ? 'reel-info--open' : '',
+        ].join(' ')}
+        onMouseEnter={() => setInfoOpen(true)}
+        onMouseLeave={() => setInfoOpen(false)}
+        onClick={() => {
+          // Touch devices have no hover — tap to expand / collapse.
+          if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+            return
+          }
+          setInfoOpen((v) => !v)
+        }}
+        role="region"
+        aria-label={`Details for ${place.name}`}
+      >
+        <div className="reel-info__panel space-y-2 rounded-2xl p-3.5">
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-white/70">
+            {isMovie ? (
+              <Clapperboard className="h-3.5 w-3.5" />
+            ) : (
+              <Utensils className="h-3.5 w-3.5" />
+            )}
+            {categoryLabel}
+          </p>
+          <h2 className="pr-14 text-2xl font-bold leading-tight drop-shadow-sm">
+            {place.name}
+          </h2>
+          <p
+            className={[
+              'pr-14 text-sm leading-relaxed text-white/90',
+              infoOpen ? 'reel-info__desc--open' : 'line-clamp-2',
+            ].join(' ')}
+          >
+            {place.description}
+          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-sm text-white/85">
+            {isMovie ? (
+              <>
+                {rating ? (
                   <span className="inline-flex items-center gap-1">
                     <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
                     {rating}
                   </span>
-                </>
-              ) : null}
-              <span>·</span>
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5 shrink-0" />
-                <span className="line-clamp-1 max-w-[11rem]">{place.location}</span>
-              </span>
-            </>
-          )}
+                ) : null}
+                {runtime ? (
+                  <>
+                    <span>·</span>
+                    <span>{runtime}</span>
+                  </>
+                ) : null}
+                {place.genres && place.genres.length > 1 ? (
+                  <>
+                    <span>·</span>
+                    <span>
+                      {infoOpen
+                        ? place.genres.join(', ')
+                        : place.genres.slice(0, 2).join(', ')}
+                    </span>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {place.price ? (
+                  <span
+                    className="font-medium tracking-wide"
+                    aria-label={`Price level ${place.price}`}
+                  >
+                    {priceLabel(place.price)}
+                  </span>
+                ) : null}
+                {place.price ? <span>·</span> : null}
+                <span>{place.distance}</span>
+                {rating ? (
+                  <>
+                    <span>·</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
+                      {rating}
+                    </span>
+                  </>
+                ) : null}
+                <span>·</span>
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" />
+                  <span
+                    className={
+                      infoOpen ? 'max-w-full' : 'line-clamp-1 max-w-[11rem]'
+                    }
+                  >
+                    {place.location}
+                  </span>
+                </span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

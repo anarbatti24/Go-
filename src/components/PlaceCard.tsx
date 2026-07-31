@@ -1,5 +1,5 @@
 /**
- * PlaceCard — compact library / list card for My Roams
+ * PlaceCard — compact library / list card for Go-Tos
  */
 
 import { Heart } from 'lucide-react'

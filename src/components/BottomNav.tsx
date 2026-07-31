@@ -2,9 +2,9 @@
  * Bottom navigation — primary tabs
  *
  * Vision: three pillars of Go!:
- *   Feed     → discover places (Reels)
- *   My Roams → your saved library
- *   Groups   → plan + vote with friends
+ *   Feed   → discover places (Reels)
+ *   Go-Tos → your saved library (places you’d go to)
+ *   Groups → plan + vote with friends
  *
  * Styled dark/translucent so it sits cleanly over the Reels feed without a hard
  * white bar interrupting immersion. Safe-area padding keeps it clear of iPhone
@@ -14,10 +14,10 @@
 import { NavLink } from 'react-router-dom'
 import { Compass, Heart, Users } from 'lucide-react'
 
-/** Tab definitions — `end: true` on Feed so `/roams` doesn't also highlight `/`. */
+/** Tab definitions — `end: true` on Feed so `/go-tos` doesn't also highlight `/`. */
 const links = [
   { to: '/', label: 'Feed', icon: Compass, end: true },
-  { to: '/roams', label: 'My Roams', icon: Heart, end: false },
+  { to: '/go-tos', label: 'Go-Tos', icon: Heart, end: false },
   { to: '/groups', label: 'Groups', icon: Users, end: false },
 ] as const
 

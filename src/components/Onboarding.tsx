@@ -271,7 +271,7 @@ export function Onboarding({
             <h1 className="text-2xl font-bold text-gray-900">Where are you?</h1>
             <p className="mt-2 text-sm leading-relaxed text-muted">
               City, neighborhood, or ZIP — next you’ll draw how far you’re
-              willing to roam.
+              willing to go.
             </p>
             <form onSubmit={handleLocationSubmit} className="mt-5 space-y-3">
               <label className="block">

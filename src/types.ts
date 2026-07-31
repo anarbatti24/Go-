@@ -1,7 +1,7 @@
 /**
  * Go! — core TypeScript models
  *
- * Vision: Go! is a social discovery app for finding places ("roams") and deciding
+ * Vision: Go! is a social discovery app for finding places ("Go-Tos") and deciding
  * where to hang out with friends. Discovery content comes from Yelp (nearby food /
  * activities) + TMDB (movies), with a sample fallback when API keys aren't set.
  */
@@ -11,7 +11,7 @@ export type PlaceSource = 'yelp' | 'tmdb' | 'sample'
 
 /**
  * A discoverable place / activity / movie shown in the Reels-style Feed.
- * `price` is a 1–4 money-bag scale for venues; movies often leave it null and
+ * `price` is a 1–4 dollar-sign scale for venues; movies often leave it null and
  * lean on `rating` + `runtimeMinutes` instead.
  */
 export interface Place {
@@ -19,7 +19,7 @@ export interface Place {
   name: string
   description: string
   image: string
-  /** Relative cost vibe: 1 = cheap, 4 = splurge. Null when unknown / N/A. */
+  /** Relative cost vibe: 1 = $, 4 = $$$$. Null when unknown / N/A. */
   price: 1 | 2 | 3 | 4 | null
   /** Human-readable distance (Yelp) or label like "In theaters" (TMDB). */
   distance: string
@@ -65,7 +65,7 @@ export interface EventSuggestion {
   addedByName: string
   /**
    * Full place snapshot so every client can render it — friends don't share
-   * the same local Feed/My Roams catalog.
+   * the same local Feed/Go-Tos catalog.
    */
   place?: Place
 }
@@ -78,7 +78,7 @@ export type WinnerResolution = 'votes' | 'random'
 
 /**
  * Shared event room — friends join via 4-digit code or `/join/:code` link,
- * add roams in the lobby, then the host starts a timed voting round.
+ * add spots in the lobby, then the host starts a timed voting round.
  * Ties trigger one re-vote among tied options; a second tie uses RNG.
  */
 export interface EventRoom {

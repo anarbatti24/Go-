@@ -2,7 +2,7 @@
  * Zustand store — the single source of truth for Go! client state
  *
  * Vision: discovery content loads from Yelp + TMDB based on the user's city /
- * zip. Saved roams are cached as full Place objects so they survive catalog
+ * zip. Saved Go-Tos are cached as full Place objects so they survive catalog
  * refreshes when the location changes. First-run prefs personalize the Feed.
  */
 
@@ -96,7 +96,7 @@ function persistGroups(groups: Group[]) {
 interface AppState {
   places: Place[]
   savedIds: string[]
-  /** Full place snapshots so My Roams still works after a catalog refresh. */
+  /** Full place snapshots so Go-Tos still works after a catalog refresh. */
   savedPlaceCache: Record<string, Place>
   groups: Group[]
   /** City, neighborhood, or ZIP used for discovery. */
