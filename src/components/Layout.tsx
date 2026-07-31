@@ -10,9 +10,14 @@
  * stack flow (Groups → start or join → vote), not another tab.
  */
 
+import { useCallback, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { PHONE_SHELL_ID } from './Modal'
+import {
+  shouldShowWelcomeSplash,
+  WelcomeSplash,
+} from './WelcomeSplash'
 import { useStore } from '../store/useStore'
 
 /** Paths that should hide the tab bar (immersive / stack screens). */
@@ -25,10 +30,13 @@ const hideNavPrefixes = ['/event/', '/join', '/room/']
 export function Layout() {
   const { pathname } = useLocation()
   const userPrefs = useStore((s) => s.userPrefs)
+  const [showSplash, setShowSplash] = useState(shouldShowWelcomeSplash)
+  const dismissSplash = useCallback(() => setShowSplash(false), [])
   const isFeed = pathname === '/'
   const onboardingOpen = isFeed && !userPrefs
   const showNav =
     !onboardingOpen &&
+    !showSplash &&
     !hideNavPrefixes.some(
       (prefix) => pathname === prefix || pathname.startsWith(prefix),
     )
@@ -61,6 +69,7 @@ export function Layout() {
           <Outlet />
         </main>
         {showNav ? <BottomNav /> : null}
+        {showSplash ? <WelcomeSplash onDone={dismissSplash} /> : null}
       </div>
     </div>
   )

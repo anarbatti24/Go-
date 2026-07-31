@@ -108,6 +108,19 @@ export async function addSuggestion(
   return data.room
 }
 
+/** Remove a roam you previously added (lobby only). */
+export async function removeSuggestion(
+  code: string,
+  memberId: string,
+  placeId: string,
+): Promise<RoomView> {
+  const data = await request(`/api/rooms/${code}/suggestions`, {
+    method: 'DELETE',
+    body: JSON.stringify({ memberId, placeId }),
+  })
+  return data.room
+}
+
 export async function castRoomVote(
   code: string,
   memberId: string,

@@ -7,7 +7,7 @@
 
 import { getRoomStore } from './roomStore.js'
 import type { ApiResult, EventMember, EventRoom, EventSuggestion, Place } from './types.js'
-import { PICKING_DURATION_MS } from './types.js'
+import { PICKING_DURATION_MS, TIE_PAUSE_MS } from './types.js'
 
 export const MAX_SUGGESTIONS = 8
 export const MIN_VOTE_SECONDS = 10
@@ -57,6 +57,9 @@ function ensureTieFields(room: EventRoom): void {
   }
   if (room.pickingEndsAt === undefined) {
     room.pickingEndsAt = null
+  }
+  if (room.tieEndsAt === undefined) {
+    room.tieEndsAt = null
   }
 }
 
@@ -111,6 +114,7 @@ function finishWithWinner(
   room.resolvedBy = resolvedBy
   room.votingEndsAt = Date.now()
   room.pickingEndsAt = null
+  room.tieEndsAt = null
 }
 
 /** After the dramatic countdown, roll among the tied places. */
@@ -122,9 +126,37 @@ function resolvePicking(room: EventRoom): void {
     room.winnerId = null
     room.resolvedBy = null
     room.pickingEndsAt = null
+    room.tieEndsAt = null
     return
   }
   finishWithWinner(room, pickRandom(pool), 'random')
+}
+
+/** Auto-start the runoff after the full-screen tie beat. */
+function beginRevote(room: EventRoom): void {
+  ensureTieFields(room)
+  const tied = room.eligiblePlaceIds
+  if (!tied || tied.length < 2) {
+    // Degenerate tie — nothing to re-vote; fall through to results if possible.
+    if (tied && tied.length === 1) {
+      finishWithWinner(room, tied[0]!, 'votes')
+      return
+    }
+    room.phase = 'results'
+    room.winnerId = null
+    room.resolvedBy = null
+    room.tieEndsAt = null
+    room.pickingEndsAt = null
+    return
+  }
+  room.phase = 'voting'
+  room.votes = {}
+  room.winnerId = null
+  room.resolvedBy = null
+  room.voteRound = 2
+  room.pickingEndsAt = null
+  room.tieEndsAt = null
+  room.votingEndsAt = Date.now() + room.voteDurationSeconds * 1000
 }
 
 /**
@@ -139,6 +171,7 @@ function resolveVoting(room: EventRoom): void {
     room.resolvedBy = null
     room.votingEndsAt = Date.now()
     room.pickingEndsAt = null
+    room.tieEndsAt = null
     return
   }
 
@@ -154,7 +187,7 @@ function resolveVoting(room: EventRoom): void {
     return
   }
 
-  // First-round tie — pause for a host-started re-vote among leaders only.
+  // First-round tie — dramatic pause, then automatic re-vote among leaders.
   if (room.voteRound < 2) {
     room.phase = 'tie'
     room.winnerId = null
@@ -162,6 +195,7 @@ function resolveVoting(room: EventRoom): void {
     room.eligiblePlaceIds = leaders
     room.votingEndsAt = null
     room.pickingEndsAt = null
+    room.tieEndsAt = Date.now() + TIE_PAUSE_MS
     return
   }
 
@@ -172,6 +206,7 @@ function resolveVoting(room: EventRoom): void {
   room.eligiblePlaceIds = leaders
   room.votingEndsAt = Date.now()
   room.pickingEndsAt = Date.now() + PICKING_DURATION_MS
+  room.tieEndsAt = null
 }
 
 function finalizeIfExpired(room: EventRoom): boolean {
@@ -182,6 +217,14 @@ function finalizeIfExpired(room: EventRoom): boolean {
     Date.now() >= room.votingEndsAt
   ) {
     resolveVoting(room)
+    return true
+  }
+  if (
+    room.phase === 'tie' &&
+    room.tieEndsAt != null &&
+    Date.now() >= room.tieEndsAt
+  ) {
+    beginRevote(room)
     return true
   }
   if (
@@ -237,6 +280,12 @@ async function loadRoom(code: string): Promise<EventRoom | null> {
             now >= draft.votingEndsAt
           ) {
             resolveVoting(draft)
+          } else if (
+            draft.phase === 'tie' &&
+            draft.tieEndsAt != null &&
+            now >= draft.tieEndsAt
+          ) {
+            beginRevote(draft)
           } else if (
             draft.phase === 'picking' &&
             draft.pickingEndsAt != null &&
@@ -326,6 +375,7 @@ export async function handleRoomsRequest(
         eligiblePlaceIds: null,
         resolvedBy: null,
         pickingEndsAt: null,
+        tieEndsAt: null,
         createdAt: Date.now(),
         version: 0,
       }
@@ -431,6 +481,7 @@ export async function handleRoomsRequest(
         draft.voteRound = 1
         draft.eligiblePlaceIds = null
         draft.pickingEndsAt = null
+        draft.tieEndsAt = null
         draft.votingEndsAt = Date.now() + draft.voteDurationSeconds * 1000
       })
       return { status: 200, body: { room: roomPayload(room) } }
@@ -443,14 +494,6 @@ export async function handleRoomsRequest(
         if (draft.phase !== 'tie') {
           throw new HttpError(400, 'No tie to break — start a new vote first')
         }
-        if (
-          !requireHost(
-            draft,
-            typeof data.memberId === 'string' ? data.memberId : undefined,
-          )
-        ) {
-          throw new HttpError(403, 'Only the host can start the re-vote')
-        }
         const tied = draft.eligiblePlaceIds
         if (!tied || tied.length < 2) {
           throw new HttpError(400, 'Need at least 2 tied places to re-vote')
@@ -458,13 +501,8 @@ export async function handleRoomsRequest(
         if (typeof data.voteDurationSeconds === 'number') {
           draft.voteDurationSeconds = clampDuration(data.voteDurationSeconds)
         }
-        draft.phase = 'voting'
-        draft.votes = {}
-        draft.winnerId = null
-        draft.resolvedBy = null
-        draft.voteRound = 2
-        draft.pickingEndsAt = null
-        draft.votingEndsAt = Date.now() + draft.voteDurationSeconds * 1000
+        // Kept for older clients; re-votes now auto-start after tieEndsAt.
+        beginRevote(draft)
       })
       return { status: 200, body: { room: roomPayload(room) } }
     }
@@ -508,6 +546,38 @@ export async function handleRoomsRequest(
           addedByName: member.name,
           place: placeSnapshot,
         })
+      })
+      return { status: 200, body: { room: roomPayload(room) } }
+    }
+
+    // Remove a roam you added (lobby only).
+    if (suggestMatch && verb === 'DELETE') {
+      const placeId =
+        typeof data.placeId === 'string' ? data.placeId.trim() : ''
+      if (!placeId) {
+        return { status: 400, body: { error: 'placeId is required' } }
+      }
+
+      const room = await mutateRoom(suggestMatch[1]!, (draft) => {
+        if (draft.phase !== 'lobby') {
+          throw new HttpError(400, 'Places are locked once voting starts')
+        }
+        const member = draft.members.find(
+          (m) =>
+            m.id === (typeof data.memberId === 'string' ? data.memberId : ''),
+        )
+        if (!member) {
+          throw new HttpError(403, 'Join the room first')
+        }
+        const index = draft.suggestions.findIndex((s) => s.placeId === placeId)
+        if (index < 0) {
+          throw new HttpError(404, 'That place is not in this room')
+        }
+        const suggestion = draft.suggestions[index]!
+        if (suggestion.addedById !== member.id) {
+          throw new HttpError(403, 'You can only remove roams you added')
+        }
+        draft.suggestions.splice(index, 1)
       })
       return { status: 200, body: { room: roomPayload(room) } }
     }
@@ -612,6 +682,7 @@ export async function handleRoomsRequest(
         draft.eligiblePlaceIds = null
         draft.votingEndsAt = null
         draft.pickingEndsAt = null
+        draft.tieEndsAt = null
         if (clearSuggestions) {
           draft.suggestions = []
         }

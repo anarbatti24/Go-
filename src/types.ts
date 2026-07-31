@@ -104,6 +104,11 @@ export interface EventRoom {
   resolvedBy: WinnerResolution | null
   /** Epoch ms when the system-pick countdown ends; set during `picking`. */
   pickingEndsAt: number | null
+  /**
+   * Epoch ms when the first-tie drama ends and the re-vote auto-starts.
+   * Set during `tie`; null otherwise.
+   */
+  tieEndsAt: number | null
   createdAt: number
   /** Server-side write counter for concurrent updates. */
   version?: number

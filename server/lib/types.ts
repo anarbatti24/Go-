@@ -8,7 +8,10 @@ export type RoomPhase = 'lobby' | 'voting' | 'tie' | 'picking' | 'results'
 export type WinnerResolution = 'votes' | 'random'
 
 /** Dramatic pause before RNG resolves a second-round tie. */
-export const PICKING_DURATION_MS = 3000
+export const PICKING_DURATION_MS = 5000
+
+/** Full-screen “it’s a tie” beat before the automatic re-vote. */
+export const TIE_PAUSE_MS = 5000
 
 export interface EventMember {
   id: string
@@ -50,6 +53,11 @@ export interface EventRoom {
   resolvedBy: WinnerResolution | null
   /** Epoch ms when the system-pick countdown ends; set during `picking`. */
   pickingEndsAt: number | null
+  /**
+   * Epoch ms when the first-tie drama ends and the re-vote auto-starts.
+   * Set during `tie`; null otherwise.
+   */
+  tieEndsAt: number | null
   createdAt: number
   /** Incremented on every write — used for compare-and-swap. */
   version?: number
