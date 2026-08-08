@@ -1,5 +1,6 @@
 /**
  * Geocode a free-text city / ZIP via OpenStreetMap Nominatim.
+ * For typeahead / autocomplete, use `./photon` instead (Nominatim forbids it).
  */
 
 export interface GeoPoint {

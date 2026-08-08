@@ -13,7 +13,7 @@ import type {
   InterestId,
   UserPrefs,
 } from '../data/interests'
-import { clampTravelMiles, DEFAULT_TRAVEL_MILES } from '../data/interests'
+import { clampTravelMiles, DEFAULT_TRAVEL_MILES, MAX_INTERESTS } from '../data/interests'
 import type { Group, Place } from '../types'
 import { createId } from '../utils/id'
 
@@ -48,7 +48,7 @@ function readStoredPrefs(): UserPrefs | null {
         : DEFAULT_TRAVEL_MILES
     return {
       ageRange: parsed.ageRange as AgeRangeId,
-      interests: parsed.interests.slice(0, 3) as InterestId[],
+      interests: parsed.interests.slice(0, MAX_INTERESTS) as InterestId[],
       maxDistanceMiles,
       completedAt:
         typeof parsed.completedAt === 'number' ? parsed.completedAt : Date.now(),
@@ -219,7 +219,7 @@ export const useStore = create<AppState>((set, get) => ({
   setUserPrefs: ({ ageRange, interests, maxDistanceMiles }) => {
     const prefs: UserPrefs = {
       ageRange,
-      interests: interests.slice(0, 3),
+      interests: interests.slice(0, MAX_INTERESTS),
       maxDistanceMiles: clampTravelMiles(maxDistanceMiles),
       completedAt: Date.now(),
     }

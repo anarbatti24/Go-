@@ -7,7 +7,12 @@
  */
 
 /** Where a catalog item came from. */
-export type PlaceSource = 'yelp' | 'tmdb' | 'sample'
+export type PlaceSource =
+  | 'yelp'
+  | 'tmdb'
+  | 'overpass'
+  | 'ticketmaster'
+  | 'sample'
 
 /**
  * A discoverable place / activity / movie shown in the Reels-style Feed.

@@ -14,7 +14,7 @@ export function priceLabel(price: 1 | 2 | 3 | 4 | null | undefined): string {
 /** Format a rating for the reel footer / detail sheet. */
 export function ratingLabel(
   rating: number | undefined,
-  source: 'yelp' | 'tmdb' | 'sample',
+  source: 'yelp' | 'tmdb' | 'overpass' | 'ticketmaster' | 'sample',
 ): string | null {
   if (rating == null || Number.isNaN(rating)) return null
   if (source === 'tmdb') return `${rating.toFixed(1)}/10`

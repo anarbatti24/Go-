@@ -38,11 +38,11 @@ export function Feed() {
   const radiusMiles = userPrefs?.maxDistanceMiles ?? DEFAULT_TRAVEL_MILES
 
   const loadForLocation = useCallback(
-    async (location: string, miles: number) => {
+    async (location: string, miles: number, interests?: InterestId[]) => {
       setPlacesStatus('loading')
       setLoadError(null)
       try {
-        const data = await discoverPlaces(location, miles)
+        const data = await discoverPlaces(location, miles, interests)
         if (data.sources.fallback && data.places.length === 0) {
           setPlaces(samplePlaces, data.message ?? null)
         } else {
@@ -64,11 +64,12 @@ export function Feed() {
 
   useEffect(() => {
     if (!readyForFeed || editingLocation) return
-    void loadForLocation(userLocation, radiusMiles)
+    void loadForLocation(userLocation, radiusMiles, userPrefs?.interests)
   }, [
     readyForFeed,
     userLocation,
     radiusMiles,
+    userPrefs?.interests,
     editingLocation,
     loadForLocation,
   ])

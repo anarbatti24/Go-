@@ -50,15 +50,34 @@ function FitTravelCircle({
 interface TravelRadiusMapProps {
   location: string
   miles: number
+  /** When set (e.g. from Photon autocomplete), skip a second geocode. */
+  lat?: number
+  lng?: number
 }
 
-export function TravelRadiusMap({ location, miles }: TravelRadiusMapProps) {
+export function TravelRadiusMap({
+  location,
+  miles,
+  lat,
+  lng,
+}: TravelRadiusMapProps) {
   const [point, setPoint] = useState<GeoPoint | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
+
+    if (
+      typeof lat === 'number' &&
+      typeof lng === 'number' &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng)
+    ) {
+      setPoint({ lat, lng, label: location })
+      setStatus('ready')
+      return
+    }
 
     const timer = window.setTimeout(() => {
       void (async () => {
@@ -78,7 +97,7 @@ export function TravelRadiusMap({ location, miles }: TravelRadiusMapProps) {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [location])
+  }, [location, lat, lng])
 
   const center = useMemo<[number, number] | null>(
     () => (point ? [point.lat, point.lng] : null),

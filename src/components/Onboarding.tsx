@@ -26,6 +26,7 @@ import {
   Utensils,
   Wine,
 } from 'lucide-react'
+import type { PlaceSuggestion } from '../api/photon'
 import {
   AGE_RANGES,
   DEFAULT_TRAVEL_MILES,
@@ -36,6 +37,7 @@ import {
   type AgeRangeId,
   type InterestId,
 } from '../data/interests'
+import { LocationAutocomplete } from './LocationAutocomplete'
 import { TravelRadiusMap } from './TravelRadiusMap'
 
 type Step = 'age' | 'interests' | 'location' | 'distance'
@@ -85,14 +87,14 @@ export function Onboarding({
   const [ageRange, setAgeRange] = useState<AgeRangeId | null>(null)
   const [interests, setInterests] = useState<InterestId[]>([])
   const [maxDistanceMiles, setMaxDistanceMiles] = useState(DEFAULT_TRAVEL_MILES)
-  const [location, setLocation] = useState(initialLocation)
+  const [place, setPlace] = useState<PlaceSuggestion | null>(null)
 
   const stepOrder: Step[] = skipLocation
     ? ['age', 'interests', 'distance']
     : ['age', 'interests', 'location', 'distance']
   const stepIndex = Math.max(0, stepOrder.indexOf(step))
   const totalSteps = stepOrder.length
-  const mapLocation = location.trim() || initialLocation.trim()
+  const mapLocation = place?.label.trim() || initialLocation.trim()
 
   const toggleInterest = (id: InterestId) => {
     setInterests((prev) => {
@@ -122,7 +124,7 @@ export function Onboarding({
 
   const handleLocationSubmit = (e: FormEvent) => {
     e.preventDefault()
-    if (!location.trim()) return
+    if (!place) return
     setStep('distance')
   }
 
@@ -270,24 +272,16 @@ export function Onboarding({
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Where are you?</h1>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              City, neighborhood, or ZIP — next you’ll draw how far you’re
-              willing to go.
+              Start typing an address, city, or ZIP — pick a match so we can
+              find real spots nearby.
             </p>
             <form onSubmit={handleLocationSubmit} className="mt-5 space-y-3">
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-gray-700">
-                  City or ZIP
-                </span>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Austin, TX or 78701"
-                  autoFocus
-                  className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none ring-primary focus:ring-2"
-                  required
-                />
-              </label>
+              <LocationAutocomplete
+                value={place}
+                onChange={setPlace}
+                initialQuery={initialLocation}
+                autoFocus
+              />
 
               {error ? (
                 <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -297,7 +291,7 @@ export function Onboarding({
 
               <button
                 type="submit"
-                disabled={!location.trim()}
+                disabled={!place}
                 className="w-full rounded-xl bg-primary py-3.5 text-sm font-semibold text-white transition hover:bg-primary-dark disabled:opacity-50"
               >
                 Continue
@@ -323,6 +317,8 @@ export function Onboarding({
                 <TravelRadiusMap
                   location={mapLocation}
                   miles={maxDistanceMiles}
+                  lat={place?.lat}
+                  lng={place?.lng}
                 />
               ) : null}
             </div>

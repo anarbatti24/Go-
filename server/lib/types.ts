@@ -63,7 +63,12 @@ export interface EventRoom {
   version?: number
 }
 
-export type PlaceSource = 'yelp' | 'tmdb' | 'sample'
+export type PlaceSource =
+  | 'yelp'
+  | 'tmdb'
+  | 'overpass'
+  | 'ticketmaster'
+  | 'sample'
 
 export interface Place {
   id: string

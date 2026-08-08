@@ -16,6 +16,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
 export function discoveryApiPlugin(): Plugin {
   let yelpKey = ''
   let tmdbKey = ''
+  let ticketmasterKey = ''
 
   return {
     name: 'go-discovery-api',
@@ -26,6 +27,7 @@ export function discoveryApiPlugin(): Plugin {
         env.TMDB_API_KEY?.trim() ||
         env.TMDB_READ_ACCESS_TOKEN?.trim() ||
         ''
+      ticketmasterKey = env.TICKETMASTER_API_KEY?.trim() || ''
     },
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
@@ -45,10 +47,11 @@ export function discoveryApiPlugin(): Plugin {
           const location = (parsed.searchParams.get('location') || '').trim()
           const radiusRaw = parsed.searchParams.get('radiusMiles')
           const radiusMiles = radiusRaw ? Number(radiusRaw) : undefined
+          const interests = parsed.searchParams.get('interests') || undefined
           const result = await handleDiscover(
             location,
-            { yelpKey, tmdbKey },
-            { radiusMiles },
+            { yelpKey, tmdbKey, ticketmasterKey },
+            { radiusMiles, interests },
           )
           sendJson(res, result.status, result.body)
         } catch (error) {

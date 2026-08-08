@@ -49,7 +49,7 @@ export interface InterestOption {
 
 export interface UserPrefs {
   ageRange: AgeRangeId
-  /** Exactly up to 3 interest ids, ordered by pick time. */
+  /** Up to MAX_INTERESTS ids, ordered by pick time. */
   interests: InterestId[]
   /** Max travel distance in miles for nearby results (0–500). */
   maxDistanceMiles: number
@@ -371,7 +371,7 @@ export const INTERESTS: InterestOption[] = [
   },
 ]
 
-export const MAX_INTERESTS = 3
+export const MAX_INTERESTS = 5
 
 const INTEREST_BY_ID = Object.fromEntries(
   INTERESTS.map((item) => [item.id, item]),
@@ -401,6 +401,22 @@ export function scorePlaceForPrefs(
 
   if (interestIds.includes('movies') && place.source === 'tmdb') {
     score += 3
+  }
+  if (
+    interestIds.some((id) =>
+      ['outdoors', 'arts', 'travel', 'chill', 'pets', 'fitness'].includes(id),
+    ) &&
+    place.source === 'overpass'
+  ) {
+    score += 4
+  }
+  if (
+    interestIds.some((id) =>
+      ['music', 'nightlife', 'arts', 'games'].includes(id),
+    ) &&
+    place.source === 'ticketmaster'
+  ) {
+    score += 4
   }
 
   for (const id of interestIds) {
@@ -458,9 +474,9 @@ export function personalizeFeed(
   let ri = 0
   let i = 0
 
-  // Hook early with a match, then every 3rd card thereafter.
+  // Prefer matches ~2 of every 3 cards; sprinkle the rest so the feed stays broad.
   while (mi < matched.length || ri < rest.length) {
-    const wantForYou = i === 1 || (i > 0 && i % 3 === 0)
+    const wantForYou = i % 3 !== 2
     if (wantForYou && mi < matched.length) {
       const place = matched[mi++]!
       feed.push(place)
@@ -468,8 +484,9 @@ export function personalizeFeed(
     } else if (ri < rest.length) {
       feed.push(rest[ri++]!)
     } else if (mi < matched.length) {
-      // Leftover matches still appear — just without the badge spam.
-      feed.push(matched[mi++]!)
+      const place = matched[mi++]!
+      feed.push(place)
+      forYouIds.add(place.id)
     }
     i += 1
   }
