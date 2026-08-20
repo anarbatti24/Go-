@@ -29,11 +29,11 @@ import {
 import type { PlaceSuggestion } from '../api/photon'
 import {
   AGE_RANGES,
-  DEFAULT_TRAVEL_MILES,
+  DEFAULT_TRAVEL_KM,
   INTERESTS,
   MAX_INTERESTS,
-  MAX_TRAVEL_MILES,
-  MIN_TRAVEL_MILES,
+  MAX_TRAVEL_KM,
+  MIN_TRAVEL_KM,
   type AgeRangeId,
   type InterestId,
 } from '../data/interests'
@@ -71,7 +71,7 @@ interface OnboardingProps {
   onComplete: (result: {
     ageRange: AgeRangeId
     interests: InterestId[]
-    maxDistanceMiles: number
+    maxDistanceKm: number
     location: string
   }) => void
 }
@@ -86,7 +86,7 @@ export function Onboarding({
   const [step, setStep] = useState<Step>('age')
   const [ageRange, setAgeRange] = useState<AgeRangeId | null>(null)
   const [interests, setInterests] = useState<InterestId[]>([])
-  const [maxDistanceMiles, setMaxDistanceMiles] = useState(DEFAULT_TRAVEL_MILES)
+  const [maxDistanceKm, setMaxDistanceKm] = useState(DEFAULT_TRAVEL_KM)
   const [place, setPlace] = useState<PlaceSuggestion | null>(null)
 
   const stepOrder: Step[] = skipLocation
@@ -117,7 +117,7 @@ export function Onboarding({
     onComplete({
       ageRange,
       interests,
-      maxDistanceMiles,
+      maxDistanceKm,
       location: mapLocation,
     })
   }
@@ -316,7 +316,7 @@ export function Onboarding({
               {mapLocation ? (
                 <TravelRadiusMap
                   location={mapLocation}
-                  miles={maxDistanceMiles}
+                  km={maxDistanceKm}
                   lat={place?.lat}
                   lng={place?.lng}
                 />
@@ -330,26 +330,26 @@ export function Onboarding({
                     Max distance
                   </p>
                   <p className="mt-1 text-3xl font-bold tabular-nums text-gray-900">
-                    {maxDistanceMiles}
+                    {maxDistanceKm}
                     <span className="ml-1 text-base font-semibold text-muted">
-                      mi
+                      km
                     </span>
                   </p>
                 </div>
                 <p className="pb-1 text-xs text-muted">
-                  {MIN_TRAVEL_MILES}–{MAX_TRAVEL_MILES} mi
+                  {MIN_TRAVEL_KM}–{MAX_TRAVEL_KM} km
                 </p>
               </div>
 
               <input
                 type="range"
-                min={MIN_TRAVEL_MILES}
-                max={MAX_TRAVEL_MILES}
+                min={MIN_TRAVEL_KM}
+                max={MAX_TRAVEL_KM}
                 step={1}
-                value={maxDistanceMiles}
-                onChange={(e) => setMaxDistanceMiles(Number(e.target.value))}
+                value={maxDistanceKm}
+                onChange={(e) => setMaxDistanceKm(Number(e.target.value))}
                 className="mt-4 w-full accent-primary"
-                aria-label="Maximum travel distance in miles"
+                aria-label="Maximum travel distance in kilometres"
               />
 
               <div className="mt-2 flex justify-between text-[11px] font-medium text-muted">

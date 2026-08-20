@@ -12,11 +12,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const location = String(req.query.location ?? '')
-  const radiusRaw = req.query.radiusMiles
-  const radiusMiles =
-    typeof radiusRaw === 'string' || typeof radiusRaw === 'number'
-      ? Number(radiusRaw)
-      : undefined
+  const radiusRaw = req.query.radiusKm ?? req.query.radiusMiles
+  let radiusKm: number | undefined
+  if (typeof radiusRaw === 'string' || typeof radiusRaw === 'number') {
+    const n = Number(radiusRaw)
+    if (Number.isFinite(n)) {
+      // Legacy clients sent miles via radiusMiles.
+      radiusKm =
+        req.query.radiusKm != null
+          ? n
+          : Math.round(n * 1.609344)
+    }
+  }
   const interestsRaw = req.query.interests
   const interests =
     typeof interestsRaw === 'string'
@@ -26,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : undefined
 
   const result = await handleDiscover(location, undefined, {
-    radiusMiles,
+    radiusKm,
     interests,
   })
   res.status(result.status).json(result.body)

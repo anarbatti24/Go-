@@ -49,7 +49,7 @@ function FitTravelCircle({
 
 interface TravelRadiusMapProps {
   location: string
-  miles: number
+  km: number
   /** When set (e.g. from Photon autocomplete), skip a second geocode. */
   lat?: number
   lng?: number
@@ -57,7 +57,7 @@ interface TravelRadiusMapProps {
 
 export function TravelRadiusMap({
   location,
-  miles,
+  km,
   lat,
   lng,
 }: TravelRadiusMapProps) {
@@ -104,7 +104,7 @@ export function TravelRadiusMap({
     [point],
   )
 
-  const radiusMeters = Math.max(0, miles) * 1609.344
+  const radiusMeters = Math.max(0, km) * 1000
 
   return (
     <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
@@ -135,7 +135,7 @@ export function TravelRadiusMap({
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
             />
             <Marker position={center} icon={pinIcon} />
-            {miles > 0 ? (
+            {km > 0 ? (
               <Circle
                 center={center}
                 radius={radiusMeters}
@@ -152,9 +152,9 @@ export function TravelRadiusMap({
         ) : null}
       </div>
       <p className="border-t border-border px-3 py-2 text-xs text-muted">
-        {miles <= 0
+        {km <= 0
           ? 'Right where you are — ultra-local picks only.'
-          : `Travel circle: about ${miles} mile${miles === 1 ? '' : 's'} out.`}
+          : `Travel circle: about ${km} km out.`}
       </p>
     </div>
   )

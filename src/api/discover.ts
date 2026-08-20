@@ -13,7 +13,7 @@ export interface DiscoverResponse {
     ticketmaster?: boolean
     fallback: boolean
   }
-  radiusMiles?: number
+  radiusKm?: number
   interests?: string[]
   message?: string
   errors?: string[]
@@ -21,12 +21,12 @@ export interface DiscoverResponse {
 
 export async function discoverPlaces(
   location: string,
-  radiusMiles?: number,
+  radiusKm?: number,
   interests?: string[],
 ): Promise<DiscoverResponse> {
   const params = new URLSearchParams({ location: location.trim() })
-  if (typeof radiusMiles === 'number' && Number.isFinite(radiusMiles)) {
-    params.set('radiusMiles', String(radiusMiles))
+  if (typeof radiusKm === 'number' && Number.isFinite(radiusKm)) {
+    params.set('radiusKm', String(radiusKm))
   }
   if (interests && interests.length > 0) {
     params.set('interests', interests.join(','))

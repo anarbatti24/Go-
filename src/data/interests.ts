@@ -51,48 +51,66 @@ export interface UserPrefs {
   ageRange: AgeRangeId
   /** Up to MAX_INTERESTS ids, ordered by pick time. */
   interests: InterestId[]
-  /** Max travel distance in miles for nearby results (0–500). */
-  maxDistanceMiles: number
+  /** Max travel distance in kilometres for nearby results (0–800). */
+  maxDistanceKm: number
   completedAt: number
 }
 
-export const MIN_TRAVEL_MILES = 0
-export const MAX_TRAVEL_MILES = 500
-export const DEFAULT_TRAVEL_MILES = 25
+export const MIN_TRAVEL_KM = 0
+export const MAX_TRAVEL_KM = 800
+export const DEFAULT_TRAVEL_KM = 40
 
-/** Yelp hard-caps radius at 40,000 meters (~24.85 mi). */
-export function milesToYelpRadiusMeters(miles: number): number | null {
-  if (!Number.isFinite(miles) || miles <= 0) return 400
+/** Yelp hard-caps radius at 40,000 meters (40 km). */
+export function kmToYelpRadiusMeters(km: number): number | null {
+  if (!Number.isFinite(km) || km <= 0) return 400
   // Beyond Yelp's cap, omit a tight radius and search by location string.
-  if (miles > 25) return null
-  return Math.min(40000, Math.max(400, Math.round(miles * 1609.344)))
+  if (km > 40) return null
+  return Math.min(40000, Math.max(400, Math.round(km * 1000)))
 }
 
-export function clampTravelMiles(miles: number): number {
-  if (!Number.isFinite(miles)) return DEFAULT_TRAVEL_MILES
-  return Math.min(MAX_TRAVEL_MILES, Math.max(MIN_TRAVEL_MILES, Math.round(miles)))
+export function clampTravelKm(km: number): number {
+  if (!Number.isFinite(km)) return DEFAULT_TRAVEL_KM
+  return Math.min(MAX_TRAVEL_KM, Math.max(MIN_TRAVEL_KM, Math.round(km)))
 }
 
-/** Parse labels like "0.4 mi" / "3.2 mi" from Place.distance. */
-export function parseMiles(distance: string | undefined): number | null {
+/** How far to nudge the travel bubble when the feed runs dry. */
+export function nextExpandKm(currentKm: number): number {
+  const current = clampTravelKm(currentKm)
+  if (current >= MAX_TRAVEL_KM) return MAX_TRAVEL_KM
+  const step = current < 25 ? 15 : current < 80 ? 25 : current < 250 ? 40 : 80
+  return clampTravelKm(current + step)
+}
+
+/**
+ * Parse distance labels as kilometres.
+ * Accepts `km` and legacy `mi` (converted) so older catalogs still filter.
+ */
+export function parseKm(distance: string | undefined): number | null {
   if (!distance) return null
-  const match = distance.match(/([\d.]+)\s*mi/i)
-  if (!match) return null
-  const value = Number(match[1])
-  return Number.isFinite(value) ? value : null
+  const kmMatch = distance.match(/([\d.]+)\s*km/i)
+  if (kmMatch) {
+    const value = Number(kmMatch[1])
+    return Number.isFinite(value) ? value : null
+  }
+  const miMatch = distance.match(/([\d.]+)\s*mi/i)
+  if (miMatch) {
+    const value = Number(miMatch[1])
+    return Number.isFinite(value) ? value * 1.609344 : null
+  }
+  return null
 }
 
 export function placeWithinDistance(
   place: Place,
-  maxMiles: number,
+  maxKm: number,
 ): boolean {
   // Movies / theater labels aren't geographic — always keep them.
   if (place.source === 'tmdb') return true
   if (/in theaters/i.test(place.distance)) return true
-  const miles = parseMiles(place.distance)
-  if (miles == null) return true
-  if (maxMiles <= 0) return miles <= 0.05
-  return miles <= maxMiles + 0.05
+  const km = parseKm(place.distance)
+  if (km == null) return true
+  if (maxKm <= 0) return km <= 0.08
+  return km <= maxKm + 0.08
 }
 
 export const AGE_RANGES: AgeRangeOption[] = [
@@ -448,7 +466,7 @@ export function personalizeFeed(
 ): { feed: Place[]; forYouIds: Set<string> } {
   const scoped = prefs
     ? places.filter((place) =>
-        placeWithinDistance(place, prefs.maxDistanceMiles),
+        placeWithinDistance(place, prefs.maxDistanceKm),
       )
     : places
 

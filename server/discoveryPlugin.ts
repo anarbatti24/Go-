@@ -45,13 +45,21 @@ export function discoveryApiPlugin(): Plugin {
 
           const parsed = new URL(url, 'http://localhost')
           const location = (parsed.searchParams.get('location') || '').trim()
-          const radiusRaw = parsed.searchParams.get('radiusMiles')
-          const radiusMiles = radiusRaw ? Number(radiusRaw) : undefined
+          const radiusKmRaw = parsed.searchParams.get('radiusKm')
+          const radiusMilesRaw = parsed.searchParams.get('radiusMiles')
+          let radiusKm: number | undefined
+          if (radiusKmRaw) {
+            const n = Number(radiusKmRaw)
+            if (Number.isFinite(n)) radiusKm = n
+          } else if (radiusMilesRaw) {
+            const n = Number(radiusMilesRaw)
+            if (Number.isFinite(n)) radiusKm = Math.round(n * 1.609344)
+          }
           const interests = parsed.searchParams.get('interests') || undefined
           const result = await handleDiscover(
             location,
             { yelpKey, tmdbKey, ticketmasterKey },
-            { radiusMiles, interests },
+            { radiusKm, interests },
           )
           sendJson(res, result.status, result.body)
         } catch (error) {

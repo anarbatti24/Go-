@@ -17,11 +17,11 @@ import {
 } from './interestSources.js'
 import type { ApiResult, Place } from './types.js'
 
-const TOTAL_LIMIT = 36
-const YELP_PER_INTEREST = 8
-const OVERPASS_LIMIT = 24
-const TMDB_LIMIT = 8
-const TICKETMASTER_LIMIT = 12
+/** Per-source caps — no global TOTAL_LIMIT; merge keeps every unique result. */
+const YELP_PER_INTEREST = 40
+const OVERPASS_LIMIT = 80
+const TMDB_LIMIT = 20
+const TICKETMASTER_LIMIT = 50
 
 interface YelpBusiness {
   id: string
@@ -117,11 +117,11 @@ const TMDB_GENRES: Record<number, string> = {
   37: 'Western',
 }
 
-function metersToMiles(meters: number | undefined): string {
+function metersToKm(meters: number | undefined): string {
   if (meters == null || Number.isNaN(meters)) return 'Nearby'
-  const miles = meters / 1609.344
-  if (miles < 0.1) return '<0.1 mi'
-  return `${miles.toFixed(1)} mi`
+  const km = meters / 1000
+  if (km < 0.1) return '<0.1 km'
+  return `${km.toFixed(1)} km`
 }
 
 function haversineMeters(
@@ -172,7 +172,7 @@ function mapYelp(biz: YelpBusiness): Place {
       biz.image_url ||
       `https://picsum.photos/seed/${encodeURIComponent(biz.id)}/720/1280`,
     price: yelpPrice(biz.price),
-    distance: metersToMiles(biz.distance),
+    distance: metersToKm(biz.distance),
     location: address,
     category: cuisine || 'Food & Drink',
     source: 'yelp',
@@ -271,7 +271,7 @@ function mapOverpass(
     description: bits.filter(Boolean).join(' · ') || 'A nearby place from the map.',
     image: `https://picsum.photos/seed/${encodeURIComponent(`osm-${el.type}-${el.id}`)}/720/1280`,
     price: null,
-    distance: metersToMiles(meters),
+    distance: metersToKm(meters),
     // Never fall back to the user's search address — that leaks onto every card.
     location: address || city || 'Nearby',
     category: String(category).replace(/_/g, ' '),
@@ -318,9 +318,9 @@ function mapTicketmaster(event: TicketmasterEvent, origin: GeoPoint): Place | nu
 
   let distance = 'Nearby'
   if (Number.isFinite(vLat) && Number.isFinite(vLng)) {
-    distance = metersToMiles(haversineMeters(origin.lat, origin.lng, vLat, vLng))
+    distance = metersToKm(haversineMeters(origin.lat, origin.lng, vLat, vLng))
   } else if (typeof venue?.distance === 'number') {
-    distance = metersToMiles(venue.distance * 1609.344)
+    distance = metersToKm(venue.distance * 1000)
   }
 
   return {
@@ -578,7 +578,7 @@ async function fetchTicketmaster(
   apiKey: string,
   origin: GeoPoint,
   interests: InterestId[],
-  radiusMiles: number,
+  radiusKm: number,
 ): Promise<Place[]> {
   const classifications = [
     ...new Set(
@@ -589,7 +589,7 @@ async function fetchTicketmaster(
   ]
   if (classifications.length === 0) return []
 
-  const radius = Math.min(100, Math.max(1, Math.round(radiusMiles || 25)))
+  const radius = Math.min(100, Math.max(1, Math.round(radiusKm || 40)))
   const results: Place[] = []
   const seen = new Set<string>()
 
@@ -598,9 +598,9 @@ async function fetchTicketmaster(
       apikey: apiKey,
       latlong: `${origin.lat},${origin.lng}`,
       radius: String(radius),
-      unit: 'miles',
+      unit: 'km',
       classificationName: classification,
-      size: String(Math.min(20, TICKETMASTER_LIMIT)),
+      size: String(Math.min(200, TICKETMASTER_LIMIT)),
       sort: 'date,asc',
     })
 
@@ -629,16 +629,14 @@ async function fetchTicketmaster(
 
 /**
  * Round-robin merge weighted toward preferred buckets so food doesn't dominate.
+ * Exhausts every unique place across buckets (no artificial total cap).
  */
-function mergeByInterest(
-  buckets: Place[][],
-  limit: number,
-): Place[] {
+function mergeByInterest(buckets: Place[][]): Place[] {
   const out: Place[] = []
   const seen = new Set<string>()
   const indices = buckets.map(() => 0)
 
-  while (out.length < limit) {
+  for (;;) {
     let progressed = false
     for (let b = 0; b < buckets.length; b++) {
       const bucket = buckets[b]!
@@ -652,7 +650,6 @@ function mergeByInterest(
         progressed = true
         break
       }
-      if (out.length >= limit) break
     }
     if (!progressed) break
   }
@@ -678,28 +675,28 @@ function needsYelp(interests: InterestId[]): boolean {
 export async function handleDiscover(
   location: string,
   keys?: { yelpKey?: string; tmdbKey?: string; ticketmasterKey?: string },
-  options?: { radiusMiles?: number; interests?: string | InterestId[] },
+  options?: { radiusKm?: number; interests?: string | InterestId[] },
 ): Promise<ApiResult> {
   const trimmed = location.trim()
   if (!trimmed) {
     return { status: 400, body: { error: 'location query param is required' } }
   }
 
-  const rawMiles =
-    typeof options?.radiusMiles === 'number' && Number.isFinite(options.radiusMiles)
-      ? options.radiusMiles
-      : 25
-  const radiusMiles = Math.min(500, Math.max(0, rawMiles))
+  const rawKm =
+    typeof options?.radiusKm === 'number' && Number.isFinite(options.radiusKm)
+      ? options.radiusKm
+      : 40
+  const radiusKm = Math.min(800, Math.max(0, rawKm))
 
   let yelpRadiusMeters: number | null
-  if (radiusMiles <= 0) {
+  if (radiusKm <= 0) {
     yelpRadiusMeters = 400
-  } else if (radiusMiles > 25) {
+  } else if (radiusKm > 40) {
     yelpRadiusMeters = null
   } else {
     yelpRadiusMeters = Math.min(
       40000,
-      Math.max(400, Math.round(radiusMiles * 1609.344)),
+      Math.max(400, Math.round(radiusKm * 1000)),
     )
   }
 
@@ -707,7 +704,7 @@ export async function handleDiscover(
     50000,
     Math.max(
       800,
-      Math.round((radiusMiles <= 0 ? 0.25 : Math.min(radiusMiles, 31)) * 1609.344),
+      Math.round((radiusKm <= 0 ? 0.4 : Math.min(radiusKm, 50)) * 1000),
     ),
   )
 
@@ -813,7 +810,7 @@ export async function handleDiscover(
             ticketmasterKey,
             geo,
             activeInterests,
-            radiusMiles <= 0 ? 5 : radiusMiles,
+            radiusKm <= 0 ? 8 : radiusKm,
           )
         } catch (err) {
           errors.push(
@@ -848,7 +845,7 @@ export async function handleDiscover(
   if (tmdbPlaces.length) mergeBuckets.push(tmdbPlaces)
   for (const bucket of yelpBuckets) mergeBuckets.push(bucket)
 
-  const places = mergeByInterest(mergeBuckets, TOTAL_LIMIT)
+  const places = mergeByInterest(mergeBuckets)
 
   if (places.length === 0) {
     return {
@@ -862,7 +859,7 @@ export async function handleDiscover(
           ticketmaster: false,
           fallback: true,
         },
-        radiusMiles,
+        radiusKm,
         interests: activeInterests,
         errors,
         message:
@@ -882,7 +879,7 @@ export async function handleDiscover(
         ticketmaster: ticketmasterPlaces.length > 0,
         fallback: false,
       },
-      radiusMiles,
+      radiusKm,
       interests: activeInterests,
       errors: errors.length ? errors : undefined,
     },

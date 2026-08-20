@@ -7,13 +7,12 @@
  */
 
 import { create } from 'zustand'
-import { samplePlaces } from '../data/places'
 import type {
   AgeRangeId,
   InterestId,
   UserPrefs,
 } from '../data/interests'
-import { clampTravelMiles, DEFAULT_TRAVEL_MILES, MAX_INTERESTS } from '../data/interests'
+import { clampTravelKm, DEFAULT_TRAVEL_KM, MAX_INTERESTS } from '../data/interests'
 import type { Group, Place } from '../types'
 import { createId } from '../utils/id'
 
@@ -29,11 +28,28 @@ function readStoredLocation(): string {
   }
 }
 
+function readStoredDistanceKm(parsed: Record<string, unknown>): number {
+  if (
+    typeof parsed.maxDistanceKm === 'number' &&
+    Number.isFinite(parsed.maxDistanceKm)
+  ) {
+    return clampTravelKm(parsed.maxDistanceKm)
+  }
+  // Legacy prefs stored miles — convert once.
+  if (
+    typeof parsed.maxDistanceMiles === 'number' &&
+    Number.isFinite(parsed.maxDistanceMiles)
+  ) {
+    return clampTravelKm(Math.round(parsed.maxDistanceMiles * 1.609344))
+  }
+  return DEFAULT_TRAVEL_KM
+}
+
 function readStoredPrefs(): UserPrefs | null {
   try {
     const raw = localStorage.getItem(PREFS_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<UserPrefs>
+    const parsed = JSON.parse(raw) as Record<string, unknown>
     if (
       typeof parsed.ageRange !== 'string' ||
       !Array.isArray(parsed.interests) ||
@@ -41,15 +57,10 @@ function readStoredPrefs(): UserPrefs | null {
     ) {
       return null
     }
-    const maxDistanceMiles =
-      typeof parsed.maxDistanceMiles === 'number' &&
-      Number.isFinite(parsed.maxDistanceMiles)
-        ? Math.min(500, Math.max(0, Math.round(parsed.maxDistanceMiles)))
-        : DEFAULT_TRAVEL_MILES
     return {
       ageRange: parsed.ageRange as AgeRangeId,
-      interests: parsed.interests.slice(0, MAX_INTERESTS) as InterestId[],
-      maxDistanceMiles,
+      interests: (parsed.interests as InterestId[]).slice(0, MAX_INTERESTS),
+      maxDistanceKm: readStoredDistanceKm(parsed),
       completedAt:
         typeof parsed.completedAt === 'number' ? parsed.completedAt : Date.now(),
     }
@@ -118,7 +129,7 @@ interface AppState {
   setUserPrefs: (prefs: {
     ageRange: AgeRangeId
     interests: InterestId[]
-    maxDistanceMiles: number
+    maxDistanceKm: number
   }) => void
   setPlaces: (places: Place[], message?: string | null) => void
   /** Merge remote place snapshots (e.g. friends' room suggestions) into catalog. */
@@ -130,7 +141,8 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set, get) => ({
-  places: samplePlaces,
+  /** Empty until discover finishes — avoids flashing sample places over a loading screen. */
+  places: [],
   savedIds: [],
   savedPlaceCache: {},
   groups: typeof window !== 'undefined' ? readStoredGroups() : [],
@@ -216,11 +228,11 @@ export const useStore = create<AppState>((set, get) => ({
     set({ userLocation: trimmed })
   },
 
-  setUserPrefs: ({ ageRange, interests, maxDistanceMiles }) => {
+  setUserPrefs: ({ ageRange, interests, maxDistanceKm }) => {
     const prefs: UserPrefs = {
       ageRange,
       interests: interests.slice(0, MAX_INTERESTS),
-      maxDistanceMiles: clampTravelMiles(maxDistanceMiles),
+      maxDistanceKm: clampTravelKm(maxDistanceKm),
       completedAt: Date.now(),
     }
     try {

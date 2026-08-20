@@ -395,20 +395,49 @@ export function Room() {
           Groups
         </Link>
         <h1 className="text-2xl font-bold text-gray-900">{room.groupName}</h1>
-        <p className="mt-1 text-sm text-muted">
-          {room.phase === 'lobby' &&
-            (me?.isHost
-              ? 'Waiting room — start when everyone is ready.'
-              : `Waiting for ${room.members.find((m) => m.isHost)?.name ?? 'the host'} to start…`)}
-          {room.phase === 'voting' &&
-            (isTiebreaker
-              ? 'Tiebreaker — pick among the tied places!'
-              : 'Voting is live — pick a place!')}
-          {room.phase === 'tie' && 'It’s a tie — re-vote starting automatically…'}
-          {room.phase === 'picking' && 'Tied again — the system is choosing…'}
-          {room.phase === 'results' && 'Voting is over.'}
-        </p>
+        {room.phase !== 'lobby' ? (
+          <p className="mt-1 text-sm text-muted">
+            {room.phase === 'voting' &&
+              (isTiebreaker
+                ? 'Tiebreaker — pick among the tied places!'
+                : 'Voting is live — pick a place!')}
+            {room.phase === 'tie' && 'It’s a tie — re-vote starting automatically…'}
+            {room.phase === 'picking' && 'Tied again — the system is choosing…'}
+            {room.phase === 'results' && 'Voting is over.'}
+          </p>
+        ) : null}
       </header>
+
+      {/* Lobby: voting hasn't started — make the wait state impossible to miss */}
+      {room.phase === 'lobby' ? (
+        <section className="mb-5 overflow-hidden rounded-2xl bg-amber-50 p-5 text-center shadow-sm ring-1 ring-amber-200">
+          <p className="text-xs font-semibold uppercase tracking-wider text-amber-800">
+            Voting hasn&apos;t started
+          </p>
+          <p className="mt-2 text-xl font-bold text-gray-900 sm:text-2xl">
+            {me?.isHost
+              ? 'Waiting for everyone to add spots'
+              : `Waiting for ${
+                  room.members.find((m) => m.isHost)?.name ?? 'the host'
+                } to start`}
+          </p>
+          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-amber-950/70">
+            {me?.isHost
+              ? 'Share the code, let friends pile in suggestions, then start when you’re ready (needs at least 2 places).'
+              : 'Take a few seconds to add places you like — once voting starts, the list locks in.'}
+          </p>
+          {!me?.isHost ? (
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-dark"
+            >
+              <Plus className="h-4 w-4" />
+              Add a place
+            </button>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* Live voting timer */}
       {room.phase === 'voting' ? (
@@ -615,7 +644,7 @@ export function Room() {
           </h2>
           <p className="text-sm text-muted">
             {room.phase === 'lobby' &&
-              'Add places before the host starts — tap × to undo yours.'}
+              'Pile in spots before voting starts — tap × to undo yours.'}
             {room.phase === 'voting' &&
               (isTiebreaker
                 ? 'Only the tied places are left — tap one.'
