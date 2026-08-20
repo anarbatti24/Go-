@@ -4,7 +4,7 @@ Sales Pitch
 
 It's Friday night. Everyone in the group chat is free, tonight's gonna be fun...**but wait**, what are you *actually* going to do? 
 
-This is a problem I've been having with my friends, we all want to hang out, but we invariably end up doing the same things and going to the same places because we don't know what else to do.
+This is a problem I've been having with my friends. We all want to hang out, but we invariably end up doing the same things and going to the same places because we don't know what else there is to do.
 
 That's the idea behind 'Go!'. At it's core, it's a social discovery and voting app (Currently just a webapp but I plan on putting it on the AppStore). You can think about it like Instagram Reels meets Google Maps.
 
