@@ -27,3 +27,5 @@ Other info
 I don't store any data, everything is local to your computer. 
 I was wanting to get people to try it and tell me what they think
 It's currently in its early stages and so I guess I'll treat this as beta-testing.
+
+Go! is built with Cursor and deployed on Vercel
