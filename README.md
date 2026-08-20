@@ -16,6 +16,7 @@ When you first open the app, you're met with some onboarding data in the form of
 4. How far you're willing to travel
 
 Once you answer those, you're presented with your 'Feed.' (It takes a couple of seconds to query the results, so please be patient. You might have to refresh the page if it's taking too long. This is something I'm working on fixing).
+
 You can scroll through the presented activities and hover over their titles to see more information. 'Save' activities that you like to your 'Go-Tos' library. When Friday night inevitably rolls around, you can create/join a 'Group,' add the activities you found interesting and vote on them with your friends (They also add their activities).
 
 And then it's set! No more waiting around for someone to take charge, simply **Discover, Vote and then Go!**
